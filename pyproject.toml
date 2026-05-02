@@ -1,0 +1,23 @@
+[project]
+name = "robust-meme-hate-detection"
+version = "0.1.0"
+description = "Adversarial robustness study for multimodal hateful meme detection."
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "torchvision",
+    "Pillow",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "tqdm",
+    "huggingface_hub",
+    "PyYAML",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+

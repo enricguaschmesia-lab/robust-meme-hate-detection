@@ -1,0 +1,18 @@
+dataset:
+  name: hateful_memes
+  local_root: data/raw/data
+  cluster_root: /scratch/robust-meme-hate-detection/data/raw/data
+  recommended_hf_repo: cs5242-hateful-memes/hateful-memes-data
+  metadata_only_hf_repo: emily49/hateful-memes
+  splits:
+    train: train.jsonl
+    dev: dev.jsonl
+    test: test.jsonl
+  label_mapping:
+    0: not_hateful
+    1: hateful
+
+dataloader:
+  batch_size: 32
+  num_workers: 4
+  image_size: 224
