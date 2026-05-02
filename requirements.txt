@@ -1,0 +1,10 @@
+torch
+torchvision
+Pillow
+numpy
+pandas
+scikit-learn
+tqdm
+huggingface_hub
+PyYAML
+

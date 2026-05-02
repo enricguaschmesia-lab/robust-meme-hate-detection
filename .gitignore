@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Project data and generated artifacts
+data/raw/*
+data/processed/*
+data/external/*
+experiments/*
+reports/generated/*
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+
+# Keep directory placeholders
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/external/.gitkeep
+!experiments/.gitkeep
+
+# Local secrets/config
+.env
+cluster/config.env
+/cluster_access_tutorial/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
