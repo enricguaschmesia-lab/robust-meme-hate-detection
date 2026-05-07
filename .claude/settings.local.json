@@ -4,7 +4,9 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "Bash(ssh-add -l)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(chmod +x *)",
+      "Bash(bash -n scripts/runai_submit_template.sh)"
     ]
   }
 }
