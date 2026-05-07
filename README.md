@@ -105,7 +105,45 @@ python -m robust_meme_hate_detection.tests.smoke_synthetic    # forward + backwa
 
 The 4 skipped tests need the dataset on disk; they run on the cluster.
 
-### Track B — EPFL Run:AI cluster
+### Track B — EPFL Run:AI cluster (manual workflow)
+
+Use this path if you access the cluster manually (no laptop-side automation
+set up). All steps run on the jumphost.
+
+```bash
+ssh <your-epfl-username>@<jumphost>
+git clone <this-repo> ~/robust-meme-hate-detection      # one-off
+cd ~/robust-meme-hate-detection
+git pull                                                 # before each session
+
+# Make sure runai points at YOUR project, not someone else's.
+runai config project course-ee-559-<your-epfl-username>
+
+# Edit `scripts/runai_submit_template.sh`:
+#   - set JOB to a unique name
+#   - set IMAGE (use a teammate's pushed image or your own)
+#   - uncomment exactly one CMD preset (smoke / train / eval)
+bash scripts/runai_submit_template.sh
+
+# Watch and inspect the job.
+runai logs <job-name> -f
+runai describe job <job-name>
+
+# Results land on shared scratch, readable by all teammates:
+ls /scratch/robust-meme-hate-detection/experiments/<job-name>/
+```
+
+The template does not depend on `cluster.sh`. It is the recommended entry
+point for collaborators. The smoke preset is the fastest way to confirm your
+runai project, mounts, and image are wired up correctly before launching a
+real training run.
+
+### Track B — EPFL Run:AI cluster (automated workflow)
+
+If you maintain a laptop-side setup with SSH agent + Docker login + your own
+`cluster/config.env` (copy `cluster/config.env.example` and fill in your
+values), you can use `cluster/cluster.sh` to drive everything from your
+laptop.
 
 Preflight:
 
