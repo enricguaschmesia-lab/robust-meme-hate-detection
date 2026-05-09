@@ -134,12 +134,18 @@ class HatefulMemesDataset:
         image_transform: Callable[[Image.Image], Any] | None = None,
         text_transform: Callable[[str], Any] | None = None,
         require_images: bool = True,
+        apply_perturbations: bool = False,
+        image_perturbation: Callable[[Image.Image], Image.Image] | None = None,
+        text_perturbation: Callable[[str], str] | None = None,
     ) -> None:
         self.dataset_root = Path(dataset_root)
         self.split = split
         self.image_transform = image_transform
         self.text_transform = text_transform
         self.require_images = require_images
+        self.apply_perturbations = apply_perturbations
+        self.image_perturbation = image_perturbation
+        self.text_perturbation = text_perturbation
         self.records = load_hateful_memes_records(self.dataset_root, split)
 
         if require_images:
@@ -157,12 +163,24 @@ class HatefulMemesDataset:
     def __getitem__(self, index: int) -> dict[str, Any]:
         record = self.records[index]
         image = Image.open(record.image_path).convert("RGB")
+        
+        # Apply perturbations first (before transforms)
+        if self.apply_perturbations and self.image_perturbation is not None:
+            image = self.image_perturbation(image)
+        
+        # Apply standard image transform
         if self.image_transform is not None:
             image = self.image_transform(image)
 
         text: Any = record.text
+        
+        # Apply perturbations first (before transforms)
+        if self.apply_perturbations and self.text_perturbation is not None:
+            text = self.text_perturbation(record.text)
+        
+        # Apply standard text transform
         if self.text_transform is not None:
-            text = self.text_transform(record.text)
+            text = self.text_transform(text)
 
         label = -1 if record.label is None else record.label
         return {
@@ -184,11 +202,19 @@ def build_hateful_memes_dataloader(
     image_transform: Callable[[Image.Image], Any] | None = None,
     text_transform: Callable[[str], Any] | None = None,
     require_images: bool = True,
+    apply_perturbations: bool = False,
+    image_perturbation: Callable[[Image.Image], Image.Image] | None = None,
+    text_perturbation: Callable[[str], str] | None = None,
 ) -> Any:
     """Build a PyTorch DataLoader for Hateful Memes.
 
     Torch is imported lazily so metadata inspection can run on machines where
     PyTorch is not installed yet.
+    
+    Args:
+        apply_perturbations: If True, apply perturbations to samples.
+        image_perturbation: Callable to perturb images (e.g., ImagePerturbation or ComposePerturbation).
+        text_perturbation: Callable to perturb text (e.g., TextPerturbation or ComposePerturbation).
     """
 
     try:
@@ -202,6 +228,9 @@ def build_hateful_memes_dataloader(
         image_transform=image_transform,
         text_transform=text_transform,
         require_images=require_images,
+        apply_perturbations=apply_perturbations,
+        image_perturbation=image_perturbation,
+        text_perturbation=text_perturbation,
     )
     if shuffle is None:
         shuffle = split == "train"
