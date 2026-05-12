@@ -1,0 +1,22 @@
+{
+  "config_path": "configs/stage1.yaml",
+  "seed": 0,
+  "device": "cuda",
+  "pos_weight": 1.7864855451062347,
+  "n_train": 8000,
+  "n_val": 500,
+  "trainable_params": 1053697,
+  "total_params": 152331010,
+  "amp_dtype": "bfloat16",
+  "val_accuracy": 0.648,
+  "val_macro_f1": 0.6372689650624062,
+  "val_auroc": 0.74316,
+  "val_precision": 0.725609756097561,
+  "val_recall": 0.476,
+  "val_fpr": 0.18,
+  "val_fnr": 0.524,
+  "best_epoch": 5,
+  "train_loss_at_best": 0.38065002041478313,
+  "epochs_run": 9,
+  "elapsed_seconds": 145.92668795585632
+}
