@@ -7,6 +7,3 @@ scikit-learn
 tqdm
 huggingface_hub
 PyYAML
-open_clip_torch>=2.24
-transformers>=4.41
-matplotlib
