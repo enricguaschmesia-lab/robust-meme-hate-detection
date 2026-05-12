@@ -49,11 +49,21 @@ def main() -> None:  # noqa: C901 — single entry point, kept linear for readab
     parser.add_argument("--config", required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", required=True, help="Output directory (created if missing)")
+    parser.add_argument(
+        "--modality",
+        choices=("multimodal", "text", "image"),
+        default=None,
+        help="Override model.modality from the config.",
+    )
     args = parser.parse_args()
 
     cfg = _load_yaml(args.config)
     seed = int(args.seed if args.seed is not None else cfg.get("seed", 0))
     seed_everything(seed)
+
+    modality = args.modality or str(cfg.get("model", {}).get("modality", "multimodal"))
+    if modality not in ("multimodal", "text", "image"):
+        raise ValueError(f"Unknown modality: {modality}")
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -139,6 +149,7 @@ def main() -> None:  # noqa: C901 — single entry point, kept linear for readab
     logger.write_metrics({
         "config_path": str(args.config),
         "seed": seed,
+        "modality": modality,
         "device": str(device),
         "pos_weight": pos_weight_val,
         "n_train": len(train_records),
@@ -169,10 +180,10 @@ def main() -> None:  # noqa: C901 — single entry point, kept linear for readab
             optimizer.zero_grad(set_to_none=True)
             if use_amp:
                 with torch.autocast(device_type="cuda", dtype=amp_dtype):
-                    logit = model(images, tokens)
+                    logit = _forward(model, modality, images, tokens)
                     loss = loss_fn(logit, labels)
             else:
-                logit = model(images, tokens)
+                logit = _forward(model, modality, images, tokens)
                 loss = loss_fn(logit, labels)
             loss.backward()
             optimizer.step()
@@ -185,7 +196,7 @@ def main() -> None:  # noqa: C901 — single entry point, kept linear for readab
                 logger.log_step({"epoch": epoch, "step": global_step, "train_loss": float(loss.detach())})
 
         train_loss_epoch = epoch_loss / max(1, n_batches)
-        val = _evaluate(model, val_loader, device, use_amp, amp_dtype)
+        val = _evaluate(model, val_loader, device, use_amp, amp_dtype, modality=modality)
         logger.log_step({"epoch": epoch, "train_loss_epoch": train_loss_epoch, **{f"val_{k}": v for k, v in val.items()}})
         print(
             f"epoch={epoch}  train_loss={train_loss_epoch:.4f}  "
@@ -218,7 +229,17 @@ def main() -> None:  # noqa: C901 — single entry point, kept linear for readab
     print(f"Best dev macro_f1={best_f1:.4f}, AUROC={best_metrics.get('val_auroc', float('nan')):.4f}, elapsed {elapsed:.1f}s", flush=True)
 
 
-def _evaluate(model, loader, device, use_amp, amp_dtype) -> dict[str, float]:
+def _forward(model, modality: str, images, tokens):
+    if modality == "multimodal":
+        return model(images, tokens)
+    if modality == "text":
+        return model.forward_text_only(tokens)
+    if modality == "image":
+        return model.forward_image_only(images)
+    raise ValueError(f"Unknown modality: {modality}")
+
+
+def _evaluate(model, loader, device, use_amp, amp_dtype, *, modality: str = "multimodal") -> dict[str, float]:
     import torch
 
     model.eval()
@@ -231,9 +252,9 @@ def _evaluate(model, loader, device, use_amp, amp_dtype) -> dict[str, float]:
             labels = batch["label"]
             if use_amp:
                 with torch.autocast(device_type="cuda", dtype=amp_dtype):
-                    logit = model(images, tokens)
+                    logit = _forward(model, modality, images, tokens)
             else:
-                logit = model(images, tokens)
+                logit = _forward(model, modality, images, tokens)
             probs = torch.sigmoid(logit.float()).detach().cpu().tolist()
             all_probs.extend(probs)
             all_labels.extend(int(x) for x in labels.tolist())
