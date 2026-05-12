@@ -1,0 +1,18 @@
+# Smoke job: random head, a few mini-batches against /scratch/datasets/hate_meta.
+# Used by `cluster.sh submit-smoke` to verify the pipeline end-to-end on the GPU.
+seed: 0
+
+model:
+  arch: ViT-B-32
+  pretrained: laion2b_s34b_b79k
+  freeze_encoders: true
+  head_hidden: 512
+  head_dropout: 0.2
+
+data:
+  dataset_root: /scratch/datasets/hate_meta
+  val_split: dev
+  num_workers: 4
+
+train:
+  batch_size: 32
