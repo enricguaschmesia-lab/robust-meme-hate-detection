@@ -261,6 +261,10 @@ def main() -> int:
     parser.add_argument('--out', required=True)
     parser.add_argument('--split', default='dev')
     parser.add_argument(
+        '--dataset-root', default=None,
+        help='Override data.dataset_root from --config (e.g. for held-out test eval against a labelled-test mirror).',
+    )
+    parser.add_argument(
         '--modality', default=None,
         choices=('multimodal', 'text', 'image'),
         help='Forward mode used during eval. Defaults to model.modality from the config.',
@@ -321,7 +325,8 @@ def main() -> int:
     modality = args.modality or str(model_cfg.get('modality', 'multimodal'))
 
     text_tfm = ClipTokenize(arch=model_cfg['arch'])
-    records = load_hateful_memes_records(Path(data_cfg['dataset_root']), args.split)
+    dataset_root = args.dataset_root or data_cfg['dataset_root']
+    records = load_hateful_memes_records(Path(dataset_root), args.split)
     records = [r for r in records if r.label is not None]
     dataset = _build_pil_loader(records)
 

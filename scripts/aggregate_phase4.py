@@ -43,10 +43,28 @@ IMAGE_ATTACKS = [
 SEVERITIES = ['low', 'medium', 'high']
 
 
-def _load_perturbed() -> dict[str, dict[str, Any]]:
-    """{model_key: payload}. model_key is e.g. 'stage1-seed0', 'baseline-text',
-    'baseline-image', 'robust-augonly-seed0', 'robust-kl-seed0'."""
-    by_model: dict[str, dict[str, Any]] = {}
+def _extract_split(key: str) -> tuple[str, str]:
+    """Split a dirname-derived key (e.g. 'robust-kl-test-seen-seed0' or 'stage1-seed0')
+    into (split, model_key) where split ∈ {dev, test_seen, test_unseen}.
+
+    Phase-7 job naming convention: ``{kind}-{recipe-key}-{split-hyphen}-seed{N}``,
+    where split-hyphen is 'test-seen' or 'test-unseen'. Legacy (Phase 5/5c) dev
+    jobs have no split tag and resolve to split='dev'.
+    """
+    m = re.match(r'^(.+?)-test-(seen|unseen)-seed(\d+)$', key)
+    if m:
+        prefix, kind, seed = m.group(1), m.group(2), m.group(3)
+        return f'test_{kind}', f'{prefix}-seed{seed}'
+    return 'dev', key
+
+
+def _load_perturbed() -> dict[tuple[str, str], dict[str, Any]]:
+    """{(split, model_key): payload}.
+
+    `split ∈ {dev, test_seen, test_unseen}`. `model_key` is e.g. 'stage1-seed0',
+    'robust-kl-seed0', 'baseline-text' — independent of split.
+    """
+    by_pair: dict[tuple[str, str], dict[str, Any]] = {}
     for d in sorted(RESULTS.glob('perturbed-*')):
         if 'smoke' in d.name or 'inspect' in d.name:
             continue
@@ -54,14 +72,15 @@ def _load_perturbed() -> dict[str, dict[str, Any]]:
         if not f.exists():
             continue
         m = re.match(r'perturbed-(.+)', d.name)
-        key = m.group(1) if m else d.name
-        by_model[key] = json.loads(f.read_text())
-    return by_model
+        raw_key = m.group(1) if m else d.name
+        split, key = _extract_split(raw_key)
+        by_pair[(split, key)] = json.loads(f.read_text())
+    return by_pair
 
 
-def _load_modality_ablation() -> dict[str, dict[str, Any]]:
-    """{model_key: payload} for ``cluster-results/modality-ablation-*``."""
-    by_model: dict[str, dict[str, Any]] = {}
+def _load_modality_ablation() -> dict[tuple[str, str], dict[str, Any]]:
+    """{(split, model_key): payload} for ``cluster-results/modality-ablation-*``."""
+    by_pair: dict[tuple[str, str], dict[str, Any]] = {}
     for d in sorted(RESULTS.glob('modality-ablation-*')):
         if 'smoke' in d.name:
             continue
@@ -69,9 +88,27 @@ def _load_modality_ablation() -> dict[str, dict[str, Any]]:
         if not f.exists():
             continue
         m = re.match(r'modality-ablation-(.+)', d.name)
-        key = m.group(1) if m else d.name
-        by_model[key] = json.loads(f.read_text())
-    return by_model
+        raw_key = m.group(1) if m else d.name
+        split, key = _extract_split(raw_key)
+        by_pair[(split, key)] = json.loads(f.read_text())
+    return by_pair
+
+
+def _filter_by_split(payloads: dict[tuple[str, str], dict[str, Any]], split: str) -> dict[str, dict[str, Any]]:
+    """Slice the (split, key) dict down to a flat {key: payload} for one split."""
+    return {k: v for (s, k), v in payloads.items() if s == split}
+
+
+def _available_splits(*payload_dicts: dict[tuple[str, str], dict[str, Any]]) -> list[str]:
+    """Stable-ordered list of splits present in any payload dict."""
+    order = ['dev', 'test_seen', 'test_unseen']
+    seen = {s for d in payload_dicts for (s, _) in d}
+    return [s for s in order if s in seen]
+
+
+def _split_suffix(split: str) -> str:
+    """File-name suffix for outputs of a given split. Dev keeps its original name."""
+    return '' if split == 'dev' else f'.{split}'
 
 
 def _is_robust_key(key: str) -> tuple[bool, str | None]:
@@ -91,8 +128,8 @@ def _is_robust_key(key: str) -> tuple[bool, str | None]:
     return False, None
 
 
-def _load_whitebox() -> dict[str, dict[str, Any]]:
-    by_model: dict[str, dict[str, Any]] = {}
+def _load_whitebox() -> dict[tuple[str, str], dict[str, Any]]:
+    by_pair: dict[tuple[str, str], dict[str, Any]] = {}
     for d in sorted(RESULTS.glob('whitebox-*')):
         if 'smoke' in d.name:
             continue
@@ -100,9 +137,10 @@ def _load_whitebox() -> dict[str, dict[str, Any]]:
         if not f.exists():
             continue
         m = re.match(r'whitebox-(.+)', d.name)
-        key = m.group(1) if m else d.name
-        by_model[key] = json.loads(f.read_text())
-    return by_model
+        raw_key = m.group(1) if m else d.name
+        split, key = _extract_split(raw_key)
+        by_pair[(split, key)] = json.loads(f.read_text())
+    return by_pair
 
 
 def _mean_std(xs: list[float]) -> tuple[float, float]:
@@ -162,8 +200,8 @@ def _aggregate_multimodal_cells(payloads: list[dict[str, Any]]) -> dict[tuple[st
     return agg
 
 
-def _write_perturbed_table(perturbed: dict[str, dict[str, Any]]) -> Path:
-    out = OUT / 'perturbed_table.md'
+def _write_perturbed_table(perturbed: dict[str, dict[str, Any]], split: str = 'dev') -> Path:
+    out = OUT / f'perturbed_table{_split_suffix(split)}.md'
     lines: list[str] = []
     lines.append('# Phase 4 — Naturalistic perturbation benchmark')
     lines.append('')
@@ -251,8 +289,8 @@ def _aggregate_multimodal_whitebox(payloads: list[dict[str, Any]]) -> dict[tuple
     return agg
 
 
-def _write_whitebox_table(whitebox: dict[str, dict[str, Any]]) -> Path:
-    out = OUT / 'whitebox_table.md'
+def _write_whitebox_table(whitebox: dict[str, dict[str, Any]], split: str = 'dev') -> Path:
+    out = OUT / f'whitebox_table{_split_suffix(split)}.md'
     lines: list[str] = []
     lines.append('# Phase 4 — White-box image attacks (FGSM / PGD)')
     lines.append('')
@@ -324,8 +362,8 @@ def _attack_family(name: str) -> str:
     return 'other'
 
 
-def _write_worst_case(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict[str, Any]]) -> Path:
-    out = OUT / 'worst_case.md'
+def _write_worst_case(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict[str, Any]], split: str = 'dev') -> Path:
+    out = OUT / f'worst_case{_split_suffix(split)}.md'
     lines: list[str] = []
     lines.append('# Phase 4 — Worst-case + modality fragility')
     lines.append('')
@@ -445,7 +483,7 @@ def _write_worst_case(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, 
 # Figures
 # ----------------------------------------------------------------------------
 
-def _make_figures(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict[str, Any]]) -> list[Path]:
+def _make_figures(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict[str, Any]], split: str = 'dev') -> list[Path]:
     import numpy as np
     import matplotlib.pyplot as plt
 
@@ -481,7 +519,7 @@ def _make_figures(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict
                             color='white' if abs(v) > vmax * 0.5 else 'black', fontsize=7)
         fig.colorbar(im, ax=ax, fraction=0.04, pad=0.04, label='ΔAUROC')
         fig.tight_layout()
-        path = FIGS / f"heatmap_perturbed_{key}.png"
+        path = FIGS / f"heatmap_perturbed_{key}{_split_suffix(split)}.png"
         fig.savefig(path, dpi=140)
         plt.close(fig)
         paths.append(path)
@@ -525,7 +563,7 @@ def _make_figures(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict
         ax.grid(alpha=0.3)
         ax.legend(fontsize=8, loc='lower left')
         fig.tight_layout()
-        path = FIGS / 'curve_whitebox.png'
+        path = FIGS / f'curve_whitebox{_split_suffix(split)}.png'
         fig.savefig(path, dpi=140)
         plt.close(fig)
         paths.append(path)
@@ -565,7 +603,7 @@ def _make_figures(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict
             ax.legend(fontsize=6, loc='lower left')
         axes[0].set_ylabel("AUROC (multimodal mean)")
         fig.tight_layout()
-        path = FIGS / 'severity_curves.png'
+        path = FIGS / f'severity_curves{_split_suffix(split)}.png'
         fig.savefig(path, dpi=140)
         plt.close(fig)
         paths.append(path)
@@ -658,8 +696,9 @@ def _write_robust_vs_clean(
     perturbed: dict[str, dict[str, Any]],
     whitebox: dict[str, dict[str, Any]],
     modality_ablation: dict[str, dict[str, Any]],
+    split: str = 'dev',
 ) -> Path:
-    out = OUT / 'robust_vs_clean.md'
+    out = OUT / f'robust_vs_clean{_split_suffix(split)}.md'
     lines: list[str] = []
     lines.append('# Phase 5 — Robust vs clean training comparison')
     lines.append('')
@@ -815,6 +854,7 @@ def _write_robust_vs_clean(
 def _make_robust_figures(
     perturbed: dict[str, dict[str, Any]],
     whitebox: dict[str, dict[str, Any]],
+    split: str = 'dev',
 ) -> list[Path]:
     """Two extra plots: a robust-kl seed-0 ΔAUROC heatmap + a clean/augonly/kl
     white-box AUROC-vs-ε curve overlay."""
@@ -854,7 +894,7 @@ def _make_robust_figures(
                             color='white' if abs(v) > vmax * 0.5 else 'black', fontsize=7)
         fig.colorbar(im, ax=ax, fraction=0.04, pad=0.04, label='ΔAUROC')
         fig.tight_layout()
-        path = FIGS / 'heatmap_robust_kl_seed0.png'
+        path = FIGS / f'heatmap_robust_kl_seed0{_split_suffix(split)}.png'
         fig.savefig(path, dpi=140)
         plt.close(fig)
         paths.append(path)
@@ -889,7 +929,7 @@ def _make_robust_figures(
         ax.grid(alpha=0.3)
         ax.legend(fontsize=7, loc='lower left')
         fig.tight_layout()
-        path = FIGS / 'curve_whitebox_robust.png'
+        path = FIGS / f'curve_whitebox_robust{_split_suffix(split)}.png'
         fig.savefig(path, dpi=140)
         plt.close(fig)
         paths.append(path)
@@ -931,14 +971,14 @@ def _is_composite_cell(cell: dict[str, Any]) -> bool:
     return str(cell.get('attack', '')).startswith('composite_')
 
 
-def _write_pool_vs_ood_table(perturbed: dict[str, dict[str, Any]]) -> Path:
+def _write_pool_vs_ood_table(perturbed: dict[str, dict[str, Any]], split: str = 'dev') -> Path:
     """Per-recipe mean ΔAUROC split by training-pool membership.
 
     Single-perturbation cells only (composite cells are reported separately).
     Caveat noted in the table: held-out text attacks are also the lowest-impact
     ones on the clean ckpt, so the text-side OOD column has limited signal.
     """
-    out = OUT / 'robust_vs_clean.md'
+    out = OUT / f'robust_vs_clean{_split_suffix(split)}.md'
     pools = _in_pool_attacks()
     pert_groups = _group_by_variant(perturbed)
 
@@ -1006,13 +1046,13 @@ def _write_pool_vs_ood_table(perturbed: dict[str, dict[str, Any]]) -> Path:
     return out
 
 
-def _write_per_severity_table(perturbed: dict[str, dict[str, Any]]) -> Path:
+def _write_per_severity_table(perturbed: dict[str, dict[str, Any]], split: str = 'dev') -> Path:
     """Per-recipe mean ΔAUROC split by severity (low / medium / high).
 
     Single-perturbation cells only. The medium column is the headline for the
     "internet-realistic threat" framing (high is at the label-preserving limit).
     """
-    out = OUT / 'robust_vs_clean.md'
+    out = OUT / f'robust_vs_clean{_split_suffix(split)}.md'
     pert_groups = _group_by_variant(perturbed)
     families = ('text', 'image-pixel', 'image-photometric', 'image-geometric', 'typographic')
 
@@ -1064,7 +1104,7 @@ def _write_per_severity_table(perturbed: dict[str, dict[str, Any]]) -> Path:
     return out
 
 
-def _write_composite_table(perturbed: dict[str, dict[str, Any]]) -> Path | None:
+def _write_composite_table(perturbed: dict[str, dict[str, Any]], split: str = 'dev') -> Path | None:
     """Per-recipe per-severity stats for composite-attack cells (Phase 5c-2).
 
     Returns None when no composite cells are present (e.g. before the 5c-2
@@ -1078,7 +1118,7 @@ def _write_composite_table(perturbed: dict[str, dict[str, Any]]) -> Path | None:
     if not has_any:
         return None
 
-    out = OUT / 'robust_vs_clean.md'
+    out = OUT / f'robust_vs_clean{_split_suffix(split)}.md'
     pert_groups = _group_by_variant(perturbed)
     composite_types = (
         'composite_2text', 'composite_2image',
@@ -1146,30 +1186,37 @@ def _write_composite_table(perturbed: dict[str, dict[str, Any]]) -> Path | None:
 # ----------------------------------------------------------------------------
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
-    perturbed = _load_perturbed()
-    whitebox = _load_whitebox()
-    modality_ablation = _load_modality_ablation()
-    print(f"perturbed eval payloads: {sorted(perturbed)}")
-    print(f"whitebox  eval payloads: {sorted(whitebox)}")
-    print(f"modality  ablation payloads: {sorted(modality_ablation)}")
+    perturbed_all = _load_perturbed()
+    whitebox_all = _load_whitebox()
+    modality_ablation_all = _load_modality_ablation()
+    splits = _available_splits(perturbed_all, whitebox_all, modality_ablation_all)
+    print(f"splits found: {splits}")
 
     paths: list[Path] = []
-    if perturbed:
-        paths.append(_write_perturbed_table(perturbed))
-    if whitebox:
-        paths.append(_write_whitebox_table(whitebox))
-    if perturbed or whitebox:
-        paths.append(_write_worst_case(perturbed, whitebox))
-    if perturbed or whitebox or modality_ablation:
-        paths.append(_write_robust_vs_clean(perturbed, whitebox, modality_ablation))
-    if perturbed:
-        paths.append(_write_pool_vs_ood_table(perturbed))
-        paths.append(_write_per_severity_table(perturbed))
-        comp = _write_composite_table(perturbed)
-        if comp is not None:
-            paths.append(comp)
-    paths.extend(_make_figures(perturbed, whitebox))
-    paths.extend(_make_robust_figures(perturbed, whitebox))
+    for split in splits:
+        perturbed = _filter_by_split(perturbed_all, split)
+        whitebox = _filter_by_split(whitebox_all, split)
+        modality_ablation = _filter_by_split(modality_ablation_all, split)
+        print(f"\n=== split={split} | perturbed={len(perturbed)} whitebox={len(whitebox)} ma={len(modality_ablation)} ===")
+        print(f"  perturbed: {sorted(perturbed)}")
+        print(f"  whitebox:  {sorted(whitebox)}")
+        print(f"  modality:  {sorted(modality_ablation)}")
+        if perturbed:
+            paths.append(_write_perturbed_table(perturbed, split=split))
+        if whitebox:
+            paths.append(_write_whitebox_table(whitebox, split=split))
+        if perturbed or whitebox:
+            paths.append(_write_worst_case(perturbed, whitebox, split=split))
+        if perturbed or whitebox or modality_ablation:
+            paths.append(_write_robust_vs_clean(perturbed, whitebox, modality_ablation, split=split))
+        if perturbed:
+            paths.append(_write_pool_vs_ood_table(perturbed, split=split))
+            paths.append(_write_per_severity_table(perturbed, split=split))
+            comp = _write_composite_table(perturbed, split=split)
+            if comp is not None:
+                paths.append(comp)
+        paths.extend(_make_figures(perturbed, whitebox, split=split))
+        paths.extend(_make_robust_figures(perturbed, whitebox, split=split))
 
     for p in paths:
         print(f"wrote {p.relative_to(REPO)}")

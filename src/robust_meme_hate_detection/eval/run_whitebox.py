@@ -59,6 +59,10 @@ def main() -> int:
     parser.add_argument('--out', required=True)
     parser.add_argument('--split', default='dev')
     parser.add_argument(
+        '--dataset-root', default=None,
+        help='Override data.dataset_root from --config (for held-out test eval).',
+    )
+    parser.add_argument(
         '--modality', default=None, choices=('multimodal', 'image'),
         help="Forward path used during eval. Defaults to model.modality from the config. "
              "Text-only models have no pixel input and are rejected.",
@@ -124,7 +128,8 @@ def main() -> int:
 
     image_tfm = ClipImage01Transform(size=224)
     text_tfm = ClipTokenize(arch=model_cfg['arch'])
-    records = load_hateful_memes_records(Path(data_cfg['dataset_root']), args.split)
+    dataset_root = args.dataset_root or data_cfg['dataset_root']
+    records = load_hateful_memes_records(Path(dataset_root), args.split)
     records = [r for r in records if r.label is not None]
 
     class _DS:
