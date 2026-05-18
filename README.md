@@ -165,6 +165,54 @@ preserving; `augonly` promoted to "secondary alternative" on
 test_seen; `kllowmed` is the borderline result. Full write-up in
 `project_planning/Phase7_Completion_Report.md`.
 
+**Phase 8 (test-side failure analysis) — done.** Ran
+`scripts/failure_analysis.py` on test_seen and test_unseen
+(after fixing a bug where `--split` only changed the caption file,
+not the cluster-results lookup). The Phase 6 class-asymmetric
+finding partially reproduces: kldrop-wins-toward-label=0 holds on
+both test splits (66 % / 71 %, vs 97 % dev — smaller effect size)
+but kl-wins-toward-label=1 breaks on test_unseen (43 %). The
+defensible held-out claim: "kldrop systematically reduces
+text-attack-induced false-positive flips on non-hate examples
+(image-branch revival mechanism)." Full write-up in
+`project_planning/Phase8_TestFailure_Report.md`.
+
+**Phase 9 (mixed composites + dropout-rate sweep) — done.**
+
+- **9a (mixed-severity composites)**: extends `_apply_composite` so
+  each component samples severity ∈ {low, medium, high}
+  independently. New `mixed` severity column in every composite
+  table. Finding: mixed ≈ medium on every (recipe, composite,
+  split) cell — realistic adversarial-user threat is medium-class,
+  not high-class. Validates the project's "medium = realistic"
+  framing.
+- **9b (modality-dropout-rate sweep)**: trains and evaluates
+  `kldrop-p015` (p=0.15) and `kldrop-p050` (p=0.50) alongside the
+  existing `kldrop` (p=0.30). **The untuned p=0.30 was *not*
+  Pareto-optimal.** `kldrop-p015` strictly dominates `kldrop` on
+  every split: image-branch revival within seed noise (image-only
+  AUROC 0.638 dev / 0.638 test_seen / 0.658 test_unseen) AND clean
+  AUROC within seed noise of the `kl` recipe (0.735 / 0.748 /
+  0.743). **New recommended default: `kldrop-p015`**, with
+  `kldrop-p050` as the conservative alternative for composite-
+  heaviest threat models. Original `kldrop` (p=0.30) is now
+  Pareto-dominated. Reports: `project_planning/Phase9a_MixedComposites_Report.md`,
+  `project_planning/Phase9b_DropoutSweep_Report.md`.
+
+**Poster figures.** `scripts/make_poster_figures.py` regenerates
+6 publication-styled figures (PNG + PDF + caption) into
+`project_planning/poster_figures/`:
+headline Pareto, image-branch revival, composite escalation,
+class-asymmetric trade-off, severity curves, dropout sweep.
+Reuses the aggregator + failure_analysis loaders so figures
+stay in sync with the per-phase tables.
+
+Reproducibility:
+```bash
+PYTHONPATH=src .venv/bin/python3 scripts/aggregate_phase4.py
+PYTHONPATH=src .venv/bin/python3 scripts/make_poster_figures.py
+```
+
 ## Architecture (one-paragraph)
 
 OpenCLIP ViT-B/32 (`laion2b_s34b_b79k`) image and text encoders, frozen by
