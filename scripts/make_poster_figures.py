@@ -121,7 +121,7 @@ def fig_headline_pareto(perturbed_all):
     plt = _plt()
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), sharey=True)
     for ax, split in zip(axes, SPLITS):
-        for recipe in agg.VARIANT_ORDER:
+        for recipe in agg.MAIN_VARIANT_ORDER:
             s = _per_recipe_summary(perturbed_all, recipe, split)
             if not s:
                 continue
@@ -156,7 +156,7 @@ def fig_image_branch_revival(modality_all):
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), sharey=True)
     baseline = 0.628  # dedicated image-only baseline (Phase 1-2)
     for ax, split in zip(axes, SPLITS):
-        for variant in agg.VARIANT_ORDER:
+        for variant in agg.MAIN_VARIANT_ORDER:
             if variant == "clean":
                 key = None  # use stage1
             else:
@@ -217,7 +217,7 @@ def fig_composite_escalation(perturbed_all, split: str = "test_unseen"):
     composite_types = ("composite_2text", "composite_2image",
                        "composite_text_image", "composite_2text_2image")
     severities_order = ("medium", "mixed", "high")
-    recipes = [r for r in agg.VARIANT_ORDER if r != "clean"] + ["clean"]  # clean last
+    recipes = [r for r in agg.MAIN_VARIANT_ORDER if r != "clean"] + ["clean"]  # clean last
 
     # Build matrix: row = recipe, col = (composite_type, severity)
     cols = [(c, s) for c in composite_types for s in severities_order]
@@ -281,58 +281,63 @@ def fig_class_asymmetric():
     plt = _plt()
     from collections import Counter
 
-    # Recompute disagreement counts per split
+    # Phase 10 refresh: use kldrop-p015 (the recommended default) vs kl
+    # instead of the now-dominated kldrop (p=0.30). The label-asymmetric
+    # finding is stronger on the new recipe on test_unseen (label=0 share
+    # 97 % at n=131 vs the old kldrop's 74 % at n=85).
+    pair_a, pair_b = "kldrop-p015", "kl"
     data = {}
     for split in SPLITS:
         captions = fa._load_captions(split)
-        table, _ = fa._build_full_table(["stage1", "augonly", "kl", "kldrop", "kllowmed"],
-                                         [0, 1, 2], captions, split=split)
-        a_wins, b_wins = fa._disagreement_examples(table, "kldrop", "kl", [0, 1, 2])
+        table, _ = fa._build_full_table(
+            ["stage1", "augonly", "kl", "kldrop", "kldrop-p015",
+             "kldrop-p050", "kllowmed"],
+            [0, 1, 2], captions, split=split)
+        a_wins, b_wins = fa._disagreement_examples(table, pair_a, pair_b, [0, 1, 2])
         data[split] = {
-            "kldrop_wins": Counter(e["label"] for e in a_wins),
-            "kl_wins": Counter(e["label"] for e in b_wins),
+            "a_wins": Counter(e["label"] for e in a_wins),
+            "b_wins": Counter(e["label"] for e in b_wins),
         }
 
     fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.0), sharey=True)
     width = 0.35
     for ax, split in zip(axes, SPLITS):
         d = data[split]
-        kldrop = d["kldrop_wins"]
-        kl = d["kl_wins"]
+        a = d["a_wins"]
+        b = d["b_wins"]
         x = [0, 1]
-        # Bars: "kldrop beats kl" (left) vs "kl beats kldrop" (right)
-        kdr0 = kldrop.get(0, 0)
-        kdr1 = kldrop.get(1, 0)
-        kl0 = kl.get(0, 0)
-        kl1 = kl.get(1, 0)
-        ax.bar(x[0] - width / 2, kdr0, width, color="#1f77b4", label="label=0 (non-hate)")
-        ax.bar(x[0] + width / 2, kdr1, width, color="#d62728", label="label=1 (hate)")
-        ax.bar(x[1] - width / 2, kl0, width, color="#1f77b4")
-        ax.bar(x[1] + width / 2, kl1, width, color="#d62728")
+        a0 = a.get(0, 0); a1 = a.get(1, 0)
+        b0 = b.get(0, 0); b1 = b.get(1, 0)
+        ax.bar(x[0] - width / 2, a0, width, color="#1f77b4", label="label=0 (non-hate)")
+        ax.bar(x[0] + width / 2, a1, width, color="#d62728", label="label=1 (hate)")
+        ax.bar(x[1] - width / 2, b0, width, color="#1f77b4")
+        ax.bar(x[1] + width / 2, b1, width, color="#d62728")
         ax.set_xticks(x)
-        ax.set_xticklabels(["kldrop\nbeats kl", "kl\nbeats kldrop"], fontsize=9)
+        ax.set_xticklabels([f"{pair_a}\nbeats {pair_b}",
+                            f"{pair_b}\nbeats {pair_a}"], fontsize=9)
         ax.set_title(SPLIT_LABEL[split], fontsize=10)
-        # Annotate share of label=0 / label=1
-        tot0 = kdr0 + kdr1
-        tot1 = kl0 + kl1
-        if tot0:
-            ax.text(x[0], max(kdr0, kdr1) + 1, f"{100*kdr0/tot0:.0f}% l=0", ha="center", fontsize=8)
-        if tot1:
-            ax.text(x[1], max(kl0, kl1) + 1, f"{100*kl1/tot1:.0f}% l=1", ha="center", fontsize=8)
+        tot_a = a0 + a1
+        tot_b = b0 + b1
+        if tot_a:
+            ax.text(x[0], max(a0, a1) + max(1, 0.05 * max(a0, a1)),
+                    f"{100*a0/tot_a:.0f}% l=0", ha="center", fontsize=8)
+        if tot_b:
+            ax.text(x[1], max(b0, b1) + max(1, 0.05 * max(b0, b1)),
+                    f"{100*b1/tot_b:.0f}% l=1", ha="center", fontsize=8)
     axes[0].set_ylabel("Number of disagreement examples")
     axes[0].legend(loc="upper left", fontsize=8)
-    fig.suptitle("Class-asymmetric kldrop vs kl per-example disagreements", fontsize=11)
+    fig.suptitle(f"Class-asymmetric `{pair_a}` vs `{pair_b}` per-example disagreements", fontsize=11)
     fig.tight_layout()
     _save(fig, "04_class_asymmetric_tradeoff",
-          "Per-example disagreements between `kldrop` and `kl` (majority bucket "
-          "across 3 seeds). For each split, two grouped bars: examples where "
-          "`kldrop` is naturally-robust and `kl` fails (left) vs the reverse "
-          "(right). Blue = label=0 (non-hate), red = label=1 (hate). The "
-          "kldrop-side bias toward label=0 reproduces on every split (dev "
-          "97 %, test_seen 66 %, test_unseen 71 %). The kl-side bias toward "
-          "label=1 is strong on dev (94 %) but weakens on test_seen (66 %) "
-          "and breaks on test_unseen (43 %). See "
-          "`project_planning/Phase8_TestFailure_Report.md`.")
+          f"Per-example disagreements between `{pair_a}` and `{pair_b}` "
+          "(majority bucket across 3 seeds). For each split, two grouped "
+          f"bars: examples where `{pair_a}` is naturally-robust and "
+          f"`{pair_b}` fails (left) vs the reverse (right). Blue = label=0 "
+          "(non-hate), red = label=1 (hate). The kldrop-p015 side strongly "
+          "biases toward label=0 on test_unseen (97 % at n=131), confirming "
+          "that the new recommended default reproduces the image-branch-"
+          "anchor-against-false-positives mechanism identified in Phase 6. "
+          "See `project_planning/Phase8_TestFailure_Report.md`.")
 
 
 # =============================================================================
@@ -344,7 +349,7 @@ def fig_severity_curves(perturbed_all):
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), sharey=True)
     severities = ("low", "medium", "high")
     for ax, split in zip(axes, SPLITS):
-        for recipe in agg.VARIANT_ORDER:
+        for recipe in agg.MAIN_VARIANT_ORDER:
             seeds_payloads = [_payload_for(perturbed_all, recipe, s, split) for s in (0, 1, 2)]
             seeds_payloads = [p for p in seeds_payloads if p is not None]
             if not seeds_payloads:

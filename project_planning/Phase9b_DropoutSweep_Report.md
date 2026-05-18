@@ -163,9 +163,24 @@ sweeps before their costs enter the recommendation.
 - **3 seeds per rate** — typical noise; ranking changes within
   ±0.005 AUROC are not robust.
 - **No re-run of failure_analysis on the new recipes** at narrative
-  depth. The per-example class-asymmetric analysis (Phase 6 / 8)
+  depth. ~~The per-example class-asymmetric analysis (Phase 6 / 8)
   could be extended to compare `kldrop-p015` vs `kl` per-example;
-  not done in this phase.
+  not done in this phase.~~ **Closed in Phase 10** — see
+  `Phase8_TestFailure_Report.md` § 8. The class-asymmetric mechanism
+  reproduces *more strongly* for `kldrop-p015` than for the original
+  `kldrop` on test_unseen (97 % at n=131 with a 95 % CI of 94–99 %,
+  vs the original kldrop's 74 % at n=85).
+
+**Phase 10 amendments to limitations:**
+- ~~Sweep is coarse (4 points).~~ **Extended in Phase 10** to 7
+  points: p ∈ {0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.50}. See § 5
+  below for the verified sweep. p=0.15 remains the winner within
+  this range; global optimality is still not claimed outside this
+  range.
+- **Threshold-tuning data leak addressed**: test splits now
+  report F1 / accuracy at the dev-tuned τ in a separate
+  "Deployment-honest threshold" section of `robust_vs_clean.test_*.md`.
+  AUROC is unaffected.
 
 ## 7. One-line conclusion
 

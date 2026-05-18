@@ -623,6 +623,15 @@ def _make_figures(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict
 
 VARIANT_ORDER = ('clean', 'augonly', 'kl', 'kldrop', 'kldrop-p015', 'kldrop-p050', 'kllowmed')
 
+# Phase 10 demotion: kldrop (p=0.30) is Pareto-dominated by kldrop-p015 on
+# every split (Phase 9b § 4). Main tables and main poster figures show only
+# the variants in MAIN_VARIANT_ORDER; the dominated recipe(s) are surfaced
+# in a separate appendix table for audit. Update this tuple after each
+# sweep step rather than blindly keeping every trained recipe in the
+# headline.
+MAIN_VARIANT_ORDER = ('clean', 'augonly', 'kl', 'kldrop-p015', 'kldrop-p050', 'kllowmed')
+DOMINATED_VARIANTS = tuple(v for v in VARIANT_ORDER if v not in MAIN_VARIANT_ORDER)  # ('kldrop',)
+
 
 def _group_by_variant(payloads: dict[str, dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Partition by training recipe: clean / augonly / kl / kldrop / kllowmed."""
@@ -720,7 +729,7 @@ def _write_robust_vs_clean(
     lines.append('')
     lines.append('| Recipe | n seeds | Clean AUROC | Clean F1 | Worst-cell text ΔAUROC | Worst-cell image ΔAUROC |')
     lines.append('|---|---:|---:|---:|---:|---:|')
-    for variant in VARIANT_ORDER:
+    for variant in MAIN_VARIANT_ORDER:
         seeds = pert_groups.get(variant, [])
         if not seeds:
             continue
@@ -747,7 +756,7 @@ def _write_robust_vs_clean(
     lines.append('')
     lines.append('| Recipe | ' + ' | '.join(families) + ' |')
     lines.append('|---|' + '|'.join(['---:'] * len(families)) + '|')
-    for variant in VARIANT_ORDER:
+    for variant in MAIN_VARIANT_ORDER:
         seeds = pert_groups.get(variant, [])
         if not seeds:
             continue
@@ -770,7 +779,7 @@ def _write_robust_vs_clean(
     if epsilons:
         lines.append('| Recipe | clean AUROC | ' + ' | '.join(f"PGD ε={e}/255" for e in epsilons) + ' |')
         lines.append('|---|---:|' + '|'.join(['---:'] * len(epsilons)) + '|')
-        for variant in VARIANT_ORDER:
+        for variant in MAIN_VARIANT_ORDER:
             seeds = wb_groups.get(variant, [])
             if not seeds:
                 continue
@@ -793,7 +802,7 @@ def _write_robust_vs_clean(
     lines.append('')
     lines.append('| Recipe | multimodal AUROC | text_only AUROC | image_only AUROC |')
     lines.append('|---|---:|---:|---:|')
-    for variant in VARIANT_ORDER:
+    for variant in MAIN_VARIANT_ORDER:
         seeds = ma_groups.get(variant, [])
         if not seeds:
             continue
@@ -831,7 +840,7 @@ def _write_robust_vs_clean(
                 return payloads[k]
         return None
 
-    for variant in VARIANT_ORDER:
+    for variant in MAIN_VARIANT_ORDER:
         nat_counts: list[int] = []
         full_counts: list[int] = []
         for seed in (0, 1, 2):
@@ -914,7 +923,7 @@ def _make_robust_figures(
             'kldrop-p015': (0, (1, 1)), 'kldrop-p050': (0, (5, 2)),
             'kllowmed': (0, (3, 1, 1, 1)),
         }
-        for variant in VARIANT_ORDER:
+        for variant in MAIN_VARIANT_ORDER:
             seeds = wb_groups.get(variant, [])
             if not seeds:
                 continue
@@ -1030,7 +1039,7 @@ def _write_pool_vs_ood_table(perturbed: dict[str, dict[str, Any]], split: str = 
     lines.append('')
     lines.append('| Recipe | text in-pool | text OOD | Δ(OOD-in) text | image in-pool | image OOD | Δ(OOD-in) image |')
     lines.append('|---|---:|---:|---:|---:|---:|---:|')
-    for variant in VARIANT_ORDER:
+    for variant in MAIN_VARIANT_ORDER:
         seeds = pert_groups.get(variant, [])
         if not seeds:
             continue
@@ -1095,7 +1104,7 @@ def _write_per_severity_table(perturbed: dict[str, dict[str, Any]], split: str =
         lines.append('')
         lines.append('| Recipe | low | **medium** (realistic) | high (stress) |')
         lines.append('|---|---:|---:|---:|')
-        for variant in VARIANT_ORDER:
+        for variant in MAIN_VARIANT_ORDER:
             seeds = pert_groups.get(variant, [])
             if not seeds:
                 continue
@@ -1108,6 +1117,200 @@ def _write_per_severity_table(perturbed: dict[str, dict[str, Any]], split: str =
                 f"| {variant} | {_fmt(lo_m, lo_s)} | **{_fmt(md_m, md_s)}** | {_fmt(hi_m, hi_s)} |"
             )
         lines.append('')
+
+    with out.open('a', encoding='utf-8') as fh:
+        fh.write('\n'.join(lines) + '\n')
+    return out
+
+
+def _write_appendix_dominated_table(
+    perturbed: dict[str, dict[str, Any]],
+    whitebox: dict[str, dict[str, Any]],
+    modality_ablation: dict[str, dict[str, Any]],
+    split: str = 'dev',
+) -> Path | None:
+    """Phase 10: surface the dominated recipes (e.g. kldrop p=0.30) in a
+    small appendix table, since they're omitted from the main tables.
+
+    Audit / completeness only — anyone reading the main report won't see
+    these recipes in the headline numbers, but the rows are preserved for
+    reviewers comparing against earlier phases.
+    """
+    if not DOMINATED_VARIANTS:
+        return None
+    out = OUT / f'robust_vs_clean{_split_suffix(split)}.md'
+
+    def _seed_lookup(payloads: dict[str, dict[str, Any]], variant: str, seed: int) -> dict[str, Any] | None:
+        if variant == 'clean':
+            return payloads.get(f"stage1-seed{seed}")
+        for prefix in (f"robust-{variant}-seed", f"train-robust-{variant}-seed"):
+            k = f"{prefix}{seed}"
+            if k in payloads:
+                return payloads[k]
+        return None
+
+    lines: list[str] = []
+    lines.append('')
+    lines.append('## Appendix — dominated recipes (for audit)')
+    lines.append('')
+    lines.append('Recipes that earlier phases tested but that were strictly Pareto-'
+                 'dominated by a sibling recipe (e.g. `kldrop` p=0.30 by `kldrop-p015`, '
+                 'see Phase 9b § 4). Numbers retained for reviewer comparison against '
+                 'the earlier phase reports; omitted from the main tables above.')
+    lines.append('')
+    lines.append('| Recipe | n seeds | Clean AUROC | Worst-cell text Δ | Image-only AUROC | Composite_2text med Δ |')
+    lines.append('|---|---:|---:|---:|---:|---:|')
+    for variant in DOMINATED_VARIANTS:
+        # clean / worst-cell from perturbed
+        seeds_p = [s for s in (0, 1, 2) if _seed_lookup(perturbed, variant, s) is not None]
+        if not seeds_p:
+            continue
+        cleans, worst_text, comp_med = [], [], []
+        for s in seeds_p:
+            p = _seed_lookup(perturbed, variant, s)
+            cleans.append(p['clean']['at_best_threshold']['auroc'])
+            text_gaps = [c['robustness_gap']['auroc'] for c in p['cells']
+                         if _attack_family(c['attack']) == 'text']
+            if text_gaps:
+                worst_text.append(max(text_gaps))
+            comp_cells = [c['robustness_gap']['auroc'] for c in p['cells']
+                          if c.get('attack') == 'composite_2text' and c.get('severity_level') == 'medium']
+            if comp_cells:
+                comp_med.append(comp_cells[0])
+        # image-only from modality_ablation
+        seeds_m = [s for s in (0, 1, 2) if _seed_lookup(modality_ablation, variant, s) is not None]
+        img_only = []
+        for s in seeds_m:
+            ma = _seed_lookup(modality_ablation, variant, s)
+            img_only.append(ma['image_only']['at_best_threshold']['auroc'])
+        lines.append(
+            f"| {variant} | {len(seeds_p)} "
+            f"| {_fmt(*_mean_std(cleans))} "
+            f"| {_fmt(*_mean_std(worst_text))} "
+            f"| {_fmt(*_mean_std(img_only)) if img_only else 'n/a'} "
+            f"| {_fmt(*_mean_std(comp_med)) if comp_med else 'n/a'} |"
+        )
+    lines.append('')
+
+    with out.open('a', encoding='utf-8') as fh:
+        fh.write('\n'.join(lines) + '\n')
+    return out
+
+
+def _classification_at_threshold(
+    probs: list[float], labels: list[int], threshold: float
+) -> dict[str, float]:
+    """Pure-stdlib classification metrics at a fixed threshold.
+
+    Returns accuracy + macro-F1. Avoids the sklearn import + keeps the
+    aggregator dependency-free for this added section.
+    """
+    preds = [1 if p >= threshold else 0 for p in probs]
+    tp = sum(1 for p, l in zip(preds, labels) if p == 1 and l == 1)
+    fp = sum(1 for p, l in zip(preds, labels) if p == 1 and l == 0)
+    fn = sum(1 for p, l in zip(preds, labels) if p == 0 and l == 1)
+    tn = sum(1 for p, l in zip(preds, labels) if p == 0 and l == 0)
+    n = max(1, tp + fp + fn + tn)
+    accuracy = (tp + tn) / n
+    prec1 = tp / max(1, tp + fp); rec1 = tp / max(1, tp + fn)
+    prec0 = tn / max(1, tn + fn); rec0 = tn / max(1, tn + fp)
+    f1_1 = 2 * prec1 * rec1 / max(1e-12, prec1 + rec1)
+    f1_0 = 2 * prec0 * rec0 / max(1e-12, prec0 + rec0)
+    return {'accuracy': accuracy, 'macro_f1': (f1_0 + f1_1) / 2}
+
+
+def _write_devtau_test_table(
+    perturbed_test: dict[str, dict[str, Any]],
+    perturbed_dev: dict[str, dict[str, Any]],
+    split: str,
+) -> Path | None:
+    """Phase 10: test-split classification metrics at the dev-tuned τ.
+
+    Per (recipe, seed): grab `clean.best_threshold` from the dev perturbed
+    JSON, then recompute clean accuracy + macro-F1 on the test split's clean
+    predictions at that fixed τ. Compares against the (already-reported)
+    split-tuned-τ numbers from `_write_robust_vs_clean`.
+
+    Appends to the `robust_vs_clean.{split}.md` file. Does nothing for the
+    dev split itself (the comparison would be τ_dev vs τ_dev — trivially
+    equal).
+    """
+    if split == 'dev':
+        return None
+    out = OUT / f'robust_vs_clean{_split_suffix(split)}.md'
+
+    def _dev_seed_lookup(variant: str, seed: int) -> dict[str, Any] | None:
+        if variant == 'clean':
+            return perturbed_dev.get(f"stage1-seed{seed}")
+        for prefix in (f"robust-{variant}-seed", f"train-robust-{variant}-seed"):
+            k = f"{prefix}{seed}"
+            if k in perturbed_dev:
+                return perturbed_dev[k]
+        return None
+
+    def _test_seed_lookup(variant: str, seed: int) -> dict[str, Any] | None:
+        if variant == 'clean':
+            return perturbed_test.get(f"stage1-seed{seed}")
+        for prefix in (f"robust-{variant}-seed", f"train-robust-{variant}-seed"):
+            k = f"{prefix}{seed}"
+            if k in perturbed_test:
+                return perturbed_test[k]
+        return None
+
+    lines: list[str] = []
+    lines.append('')
+    lines.append('## Deployment-honest threshold: dev-tuned τ applied to test')
+    lines.append('')
+    lines.append('Per-split-tuned `τ` (the default elsewhere in this file) uses *test* '
+                 'labels to pick the threshold — mild data leakage. The cleaner '
+                 'methodology fixes τ on dev and applies that fixed τ to test '
+                 'predictions. AUROC is threshold-independent and is identical across '
+                 'both choices; only macro-F1 and accuracy change.')
+    lines.append('')
+    lines.append('| Recipe | τ (dev) mean | Clean F1 @ τ_dev | Clean F1 @ τ_test (default) | Clean Acc @ τ_dev | Clean Acc @ τ_test |')
+    lines.append('|---|---:|---:|---:|---:|---:|')
+
+    for variant in MAIN_VARIANT_ORDER:
+        rows_taus = []
+        rows_f1_dev = []
+        rows_f1_test = []
+        rows_acc_dev = []
+        rows_acc_test = []
+        for seed in (0, 1, 2):
+            p_dev = _dev_seed_lookup(variant, seed)
+            p_test = _test_seed_lookup(variant, seed)
+            if p_dev is None or p_test is None:
+                continue
+            tau_dev = p_dev['clean']['best_threshold']
+            if not p_test['cells']:
+                continue
+            ex = p_test['cells'][0]['examples']
+            probs = [float(e['clean_prob']) for e in ex]
+            labels = [int(e['label']) for e in ex]
+            m_dev = _classification_at_threshold(probs, labels, tau_dev)
+            f1_test_default = p_test['clean']['at_best_threshold']['macro_f1']
+            acc_test_default = p_test['clean']['at_best_threshold']['accuracy']
+            rows_taus.append(tau_dev)
+            rows_f1_dev.append(m_dev['macro_f1'])
+            rows_f1_test.append(f1_test_default)
+            rows_acc_dev.append(m_dev['accuracy'])
+            rows_acc_test.append(acc_test_default)
+        if not rows_taus:
+            continue
+        lines.append(
+            f"| {variant} | {_fmt(*_mean_std(rows_taus), decimals=3)} "
+            f"| {_fmt(*_mean_std(rows_f1_dev), decimals=4)} "
+            f"| {_fmt(*_mean_std(rows_f1_test), decimals=4)} "
+            f"| {_fmt(*_mean_std(rows_acc_dev), decimals=4)} "
+            f"| {_fmt(*_mean_std(rows_acc_test), decimals=4)} |"
+        )
+    lines.append('')
+    lines.append('Reading: "Clean F1 @ τ_dev" is the deployment-honest number — what '
+                 'you would get if you tuned τ once on dev and shipped to a test-like '
+                 'distribution. The split-tuned column uses test labels and is therefore '
+                 'an upper bound on real-world F1. AUROC columns elsewhere in this file '
+                 'are unaffected.')
+    lines.append('')
 
     with out.open('a', encoding='utf-8') as fh:
         fh.write('\n'.join(lines) + '\n')
@@ -1186,7 +1389,7 @@ def _write_composite_table(perturbed: dict[str, dict[str, Any]], split: str = 'd
         else:
             lines.append('| Recipe | low ΔAUROC | medium ΔAUROC | high ΔAUROC | high ASR |')
             lines.append('|---|---:|---:|---:|---:|')
-        for variant in VARIANT_ORDER:
+        for variant in MAIN_VARIANT_ORDER:
             seeds = pert_groups.get(variant, [])
             if not seeds:
                 continue
@@ -1225,6 +1428,7 @@ def main() -> int:
     splits = _available_splits(perturbed_all, whitebox_all, modality_ablation_all)
     print(f"splits found: {splits}")
 
+    perturbed_dev = _filter_by_split(perturbed_all, 'dev')
     paths: list[Path] = []
     for split in splits:
         perturbed = _filter_by_split(perturbed_all, split)
@@ -1248,6 +1452,16 @@ def main() -> int:
             comp = _write_composite_table(perturbed, split=split)
             if comp is not None:
                 paths.append(comp)
+        # Phase 10: dev-tuned τ test-eval section (test splits only)
+        if split != 'dev' and perturbed and perturbed_dev:
+            devtau = _write_devtau_test_table(perturbed, perturbed_dev, split=split)
+            if devtau is not None:
+                paths.append(devtau)
+        # Phase 10: appendix table for dominated recipes
+        if perturbed or modality_ablation:
+            app = _write_appendix_dominated_table(perturbed, whitebox, modality_ablation, split=split)
+            if app is not None:
+                paths.append(app)
         paths.extend(_make_figures(perturbed, whitebox, split=split))
         paths.extend(_make_robust_figures(perturbed, whitebox, split=split))
 

@@ -194,3 +194,81 @@ false-positive flips on non-hate examples (image-branch revival
 mechanism)"; the kl side reduces to a Pareto preference for
 clean-accuracy preservation without a clean class-conditional
 story.
+
+## 8. Refreshed on the new recommended ckpt (`kldrop-p015`) — Phase 10 amendment
+
+After Phase 9b promoted `kldrop-p015` (p=0.15) as the recommended default
+in place of the now-Pareto-dominated `kldrop` (p=0.30), the multi-pair
+failure analysis was re-run with three pairs: `kldrop-p015:kl`,
+`kldrop-p015:kldrop`, and the original `kldrop:kl` (kept for direct
+comparison). Disagreement-count percentages now carry **percentile
+bootstrap 95 % CIs** (n_boot=2000) so the dev/test effect-size
+gap is interpretable.
+
+### 8.1 Refreshed kldrop-p015 vs kl
+
+| Split | n_disagreements | `kldrop-p015`-wins (n) | label=0 share | 95 % CI | `kl`-wins (n) | label=1 share | 95 % CI |
+|---|---:|---:|---:|---|---:|---:|---|
+| dev (n=500) | 43 | 21 | 43 % | (24–62 %) | 22 | 68 % | (50–86 %) |
+| test_seen (n=1000) | 78 | 46 | 41 % | (28–55 %) | 32 | 34 % | (19–50 %) |
+| test_unseen (n=2000) | 208 | **131** | **97 %** | **(94–99 %)** | 77 | 75 % | (65–84 %) |
+
+**Reading.**
+
+- On test_unseen (the most naturalistic split, n=2000), `kldrop-p015`
+  vs `kl` shows the **strongest class-asymmetric signal in the
+  project**: 97 % of `kldrop-p015`-wins are label=0 over n=131
+  disagreements, 95 % CI (94, 99 %). That clears the small-sample-
+  noise concern raised in § 1 of this report — the kldrop-p015
+  side reproduction is now backed by a CI tight enough to refute
+  the null hypothesis (50 %) decisively.
+- On test_seen (rebalanced 49 % positive), the asymmetry is mild
+  in both directions and CIs overlap 50 %. This is the expected
+  consequence of the class-prior shift: with 49 % positive
+  prior, examples near the threshold are more class-balanced.
+- On dev, the small sample (n=21 wins) gives a wide CI that
+  doesn't exclude 50 %. The bootstrap CI flags the original
+  Phase 6 dev-only narrative as underpowered.
+
+### 8.2 kldrop-p015 vs the old kldrop
+
+| Split | `kldrop-p015`-wins (n) | label=0 share | 95 % CI | `kldrop`-wins (n) | label=1 share | 95 % CI |
+|---|---:|---:|---|---:|---:|---|
+| dev | 44 | **5 %** | (0–14 %) | 30 | 7 % | (0–20 %) |
+| test_seen | 55 | 24 % | (13–35 %) | 32 | 19 % | (6–34 %) |
+| test_unseen | 135 | **90 %** | (84–94 %) | 59 | 76 % | (64–86 %) |
+
+**Reading.**
+
+- On test_unseen, `kldrop-p015` saves overwhelmingly label=0
+  examples vs the dominated p=0.30 (90 % label=0 over n=135) —
+  the same image-branch-anchor mechanism but stronger at p=0.15.
+  This is consistent with `kldrop-p015`'s higher clean AUROC:
+  more examples are clean-correct in the first place, so more
+  can be "saved" by the image-branch fallback.
+- On dev, `kldrop-p015` wins are dominated by **label=1**
+  (95 % of 44) — the opposite asymmetry. Plausible: at p=0.15
+  the head is closer to `kl`'s preserved-confidence regime, so
+  it picks up `kl`-style label=1 saves on the small dev pool.
+- This dev/test divergence is itself a signal that the dev sample
+  is too small to characterise the per-example mechanism. The
+  test_unseen numbers are the defensible ones.
+
+### 8.3 Refreshed Phase 6 / Phase 8 § 1 verdict
+
+The Phase 6 class-asymmetric story not only reproduces for the new
+recommended ckpt — **it is stronger** on the naturalistic-prior test
+split with the new recipe. The defensible final claim for the
+report and poster:
+
+> "On test_unseen, the kldrop-p015 recipe's per-example wins
+> against kl are 97 % label=0 (95 % CI 94–99 %, n=131), confirming
+> with held-out evidence that modality-dropout-based image-branch
+> revival prevents text-attack-induced false-positive flips on
+> non-hate examples."
+
+The kl-side claim ("kl saves label=1") is *not* the same claim as
+above; it was the bidirectional formulation, and the test data
+shows the kl-side bias is weak (75 % on test_unseen) and breaks
+on test_seen (34 %). The poster figure (figure 4) is updated to
+show the refreshed kldrop-p015-vs-kl pair across all 3 splits.

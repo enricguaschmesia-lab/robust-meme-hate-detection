@@ -127,9 +127,230 @@ Examples whose *majority* bucket across seeds is B2 or B3 for **every** of `stag
 
 (+689 more in the consensus-failure set; full list available in the JSON dump below.)
 
-## 3. Where `kldrop` beats `kl` (n=41)
+## 3. Where `kldrop-p015` beats `kl` (n=46)
 
-Examples where `kldrop`'s majority bucket is B1_robust and `kl` is naturally failing (B2 or B3) — kldrop-specific fixes.
+Examples where `kldrop-p015`'s majority bucket is naturally-robust (B1 or B4) and `kl`'s is naturally-failing (B2/B3/B5).
+label=0 share: **41 %** (95 % CI: 26–54 %, n=46)
+
+#### id=01284  (label=1)
+- Caption: `muslims offend me`
+- `kldrop-p015` clean prob `0.841` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.889` (τ=0.46), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `char_swap@medium` → prob `0.334`
+
+#### id=05879  (label=0)
+- Caption: `me watching the pride parade`
+- `kldrop-p015` clean prob `0.193` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.282` (τ=0.46), bucket `B5_composite_only_failure`
+- `kl` worst text attack: `censoring@high` → prob `0.342`
+
+#### id=07265  (label=1)
+- Caption: `muslim terror attacks are more frequent white terror attacks are more efficient`
+- `kldrop-p015` clean prob `0.926` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.889` (τ=0.46), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `char_deletion@high` → prob `0.311`
+
+#### id=09687  (label=0)
+- Caption: `rare picture of child birth`
+- `kldrop-p015` clean prob `0.017` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.110` (τ=0.46), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `keyboard_typo@high` → prob `0.353`
+
+#### id=10938  (label=0)
+- Caption: `international boxing day`
+- `kldrop-p015` clean prob `0.043` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.191` (τ=0.46), bucket `B5_composite_only_failure`
+- `kl` worst text attack: `char_swap@medium` → prob `0.421`
+
+#### id=13765  (label=0)
+- Caption: `when your parents tell you to go to the store when you just got home`
+- `kldrop-p015` clean prob `0.022` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.073` (τ=0.46), bucket `B5_composite_only_failure`
+- `kl` worst text attack: `char_deletion@medium` → prob `0.322`
+
+#### id=21730  (label=0)
+- Caption: `live. laugh. love`
+- `kldrop-p015` clean prob `0.012` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.041` (τ=0.46), bucket `B5_composite_only_failure`
+- `kl` worst text attack: `keyboard_typo@high` → prob `0.311`
+
+#### id=24815  (label=0)
+- Caption: `the day that shook new york city`
+- `kldrop-p015` clean prob `0.219` (τ=0.47), bucket `B4_pgd_only`
+- `kl` clean prob `0.238` (τ=0.46), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `censoring@high` → prob `0.401`
+
+(+38 more.)
+
+## 4. Where `kl` beats `kldrop-p015` (n=32)
+
+Reverse direction — `kl`-specific fixes.
+label=1 share: **34 %** (95 % CI: 19–50 %, n=32)
+
+#### id=03976  (label=1)
+- Caption: `warning "every" country that has become involved in muslim immigration has eventually bec…`
+- `kldrop-p015` clean prob `0.613` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.792` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `char_deletion@medium` → prob `0.628`
+
+#### id=08691  (label=0)
+- Caption: `if he dies in the movie "toy story" all the toys have to watch as the children play with …`
+- `kldrop-p015` clean prob `0.053` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.067` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `leetspeak@medium` → prob `0.139`
+
+#### id=13890  (label=0)
+- Caption: `when this said it would be dry this wasn't what i expected`
+- `kldrop-p015` clean prob `0.197` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.174` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `char_swap@medium` → prob `0.458`
+
+#### id=16478  (label=0)
+- Caption: `do you think cnn will be warned when 70 fbi agents show up at brennan's house at 5am?`
+- `kldrop-p015` clean prob `0.021` (τ=0.47), bucket `B5_composite_only_failure`
+- `kl` clean prob `0.085` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `char_swap@high` → prob `0.408`
+
+#### id=17864  (label=1)
+- Caption: `when dad keeps banging the goat instead of you`
+- `kldrop-p015` clean prob `0.912` (τ=0.47), bucket `B5_composite_only_failure`
+- `kl` clean prob `0.890` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `spacing@high` → prob `0.577`
+
+#### id=18453  (label=1)
+- Caption: `when i grow up i want to be a gas plumber`
+- `kldrop-p015` clean prob `0.655` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.743` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `keyboard_typo@medium` → prob `0.693`
+
+#### id=27548  (label=1)
+- Caption: `illegal immigration the cowboy way we'll know them if they try to come back in!`
+- `kldrop-p015` clean prob `0.577` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.553` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `spacing@medium` → prob `0.423`
+
+#### id=27659  (label=1)
+- Caption: `when ur too young to know racism but ur happy cause u got a new pet`
+- `kldrop-p015` clean prob `0.711` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.815` (τ=0.46), bucket `B4_pgd_only`
+- `kl` worst text attack: `char_deletion@medium` → prob `0.546`
+
+(+24 more.)
+
+## 5. Where `kldrop-p015` beats `kldrop` (n=55)
+
+Examples where `kldrop-p015`'s majority bucket is naturally-robust (B1 or B4) and `kldrop`'s is naturally-failing (B2/B3/B5).
+label=0 share: **24 %** (95 % CI: 13–36 %, n=55)
+
+#### id=01284  (label=1)
+- Caption: `muslims offend me`
+- `kldrop-p015` clean prob `0.841` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.829` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `spacing@high` → prob `0.297`
+
+#### id=05791  (label=1)
+- Caption: `mohammed i'm pregnant.... don't sass me, you know it's funny! ~cupcakes`
+- `kldrop-p015` clean prob `0.955` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.949` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `censoring@high` → prob `0.614`
+
+#### id=06387  (label=1)
+- Caption: `when your leader is killed by a drone and you get to fuck his herd of goats`
+- `kldrop-p015` clean prob `0.892` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.918` (τ=0.48), bucket `B5_composite_only_failure`
+- `kldrop` worst text attack: `leetspeak@high` → prob `0.799`
+
+#### id=07314  (label=0)
+- Caption: `spending alot of time with your pets`
+- `kldrop-p015` clean prob `0.004` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.005` (τ=0.48), bucket `B5_composite_only_failure`
+- `kldrop` worst text attack: `punctuation@high` → prob `0.095`
+
+#### id=10564  (label=1)
+- Caption: `white people when they learn fish swim in schools`
+- `kldrop-p015` clean prob `0.882` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.822` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `spacing@high` → prob `0.455`
+
+#### id=16452  (label=0)
+- Caption: `roses are red, violets are blue i hope you like anal fisting`
+- `kldrop-p015` clean prob `0.149` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.184` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `char_swap@low` → prob `0.357`
+
+#### id=16473  (label=1)
+- Caption: `we are all the same no matter are you black, yellow, red or normal`
+- `kldrop-p015` clean prob `0.822` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.737` (τ=0.48), bucket `B5_composite_only_failure`
+- `kldrop` worst text attack: `censoring@high` → prob `0.605`
+
+#### id=19384  (label=0)
+- Caption: `when your leader is killed by a drone and you get to fuck his herd of goats`
+- `kldrop-p015` clean prob `0.007` (τ=0.47), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.014` (τ=0.48), bucket `B5_composite_only_failure`
+- `kldrop` worst text attack: `censoring@high` → prob `0.090`
+
+(+47 more.)
+
+## 6. Where `kldrop` beats `kldrop-p015` (n=32)
+
+Reverse direction — `kldrop`-specific fixes.
+label=1 share: **19 %** (95 % CI: 6–34 %, n=32)
+
+#### id=03869  (label=0)
+- Caption: `a mother's love for the child is a divine thing`
+- `kldrop-p015` clean prob `0.033` (τ=0.47), bucket `B5_composite_only_failure`
+- `kldrop` clean prob `0.036` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `punctuation@high` → prob `0.318`
+
+#### id=05792  (label=0)
+- Caption: `when you just realize that you forgot to take the cake out of the oven`
+- `kldrop-p015` clean prob `0.217` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.258` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `char_deletion@low` → prob `0.434`
+
+#### id=08691  (label=0)
+- Caption: `if he dies in the movie "toy story" all the toys have to watch as the children play with …`
+- `kldrop-p015` clean prob `0.053` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.067` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `leetspeak@medium` → prob `0.147`
+
+#### id=10462  (label=1)
+- Caption: `back in my day there were only two genders male and not male`
+- `kldrop-p015` clean prob `0.955` (τ=0.47), bucket `B5_composite_only_failure`
+- `kldrop` clean prob `0.949` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `censoring@high` → prob `0.642`
+
+#### id=16478  (label=0)
+- Caption: `do you think cnn will be warned when 70 fbi agents show up at brennan's house at 5am?`
+- `kldrop-p015` clean prob `0.021` (τ=0.47), bucket `B5_composite_only_failure`
+- `kldrop` clean prob `0.056` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `char_swap@high` → prob `0.316`
+
+#### id=20815  (label=0)
+- Caption: `old barack obama`
+- `kldrop-p015` clean prob `0.094` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.105` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `censoring@high` → prob `0.340`
+
+#### id=27410  (label=0)
+- Caption: `party tonight? i'm down`
+- `kldrop-p015` clean prob `0.132` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.199` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `spacing@high` → prob `0.358`
+
+#### id=27548  (label=1)
+- Caption: `illegal immigration the cowboy way we'll know them if they try to come back in!`
+- `kldrop-p015` clean prob `0.577` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.628` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `spacing@medium` → prob `0.484`
+
+(+24 more.)
+
+## 7. Where `kldrop` beats `kl` (n=41)
+
+Examples where `kldrop`'s majority bucket is naturally-robust (B1 or B4) and `kl`'s is naturally-failing (B2/B3/B5).
+label=0 share: **63 %** (95 % CI: 49–76 %, n=41)
 
 #### id=03869  (label=0)
 - Caption: `a mother's love for the child is a divine thing`
@@ -181,9 +402,10 @@ Examples where `kldrop`'s majority bucket is B1_robust and `kl` is naturally fai
 
 (+33 more.)
 
-## 4. Where `kl` beats `kldrop` (n=50)
+## 8. Where `kl` beats `kldrop` (n=50)
 
-Reverse direction — `kl`-specific fixes. Tradeoff cases where `kldrop`'s clean-accuracy cost manifests at the per-example level.
+Reverse direction — `kl`-specific fixes.
+label=1 share: **70 %** (95 % CI: 58–82 %, n=50)
 
 #### id=03976  (label=1)
 - Caption: `warning "every" country that has become involved in muslim immigration has eventually bec…`
@@ -235,7 +457,7 @@ Reverse direction — `kl`-specific fixes. Tradeoff cases where `kldrop`'s clean
 
 (+42 more.)
 
-## 5. Composite-only failures (B5) — examples robust to single-cell, broken by composites
+## 9. Composite-only failures (B5) — examples robust to single-cell, broken by composites
 
 Per recipe count (majority across seeds):
 
@@ -503,7 +725,7 @@ Representative B5 examples for each recipe (up to 5):
   - `composite_2text` mean attacked prob `0.078`
   - `composite_2image` mean attacked prob `0.028`
 
-## 6. Limitations of this analysis
+## 10. Limitations of this analysis
 
 - Single eval split (`test_seen`); recipe-seed counts are point estimates per seed averaged across 3 seeds — small samples.
 - `B5_composite_only_failure` and `B4_pgd_only` are *strict* — they require survival of every single-cell natural attack first. An example flipped by both a single-cell and a composite goes into B3, not B5.
