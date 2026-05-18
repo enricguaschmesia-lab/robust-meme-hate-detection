@@ -113,6 +113,20 @@ perturbations at moderate severity), `kldrop` is the recommended ckpt.
 Full write-up in `project_planning/Phase5_Completion_Report.md` § 13;
 data in `project_planning/phase4/robust_vs_clean.md`.
 
+**Phase 6 (failure analysis narrative) — done.** Extended
+`scripts/failure_analysis.py` to multi-seed, multi-recipe,
+composite-aware (new bucket `B5_composite_only_failure`). Strongest
+finding: `kldrop` and `kl` trade off **class-asymmetrically**. The
+34 examples `kldrop` saves vs `kl` are 33/34 label=0 (non-hate —
+revived image branch prevents text-attack false positives); the 49
+examples `kl` saves vs `kldrop` are 46/49 label=1 (hate —
+preserved clean accuracy keeps borderline-hate predictions on the
+right side of the threshold after text-attack margin erosion). The
+strongest deployment-conditional finding of the project:
+false-positive-sensitive contexts prefer `kldrop`; recall-sensitive
+contexts prefer `kl`. Full write-up in
+`project_planning/Phase6_Completion_Report.md`.
+
 ## Architecture (one-paragraph)
 
 OpenCLIP ViT-B/32 (`laion2b_s34b_b79k`) image and text encoders, frozen by

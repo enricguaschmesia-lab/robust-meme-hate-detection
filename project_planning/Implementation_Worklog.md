@@ -1,4 +1,4 @@
-# Implementation Worklog — Phases 1–15
+# Implementation Worklog — Phases 1–16
 
 This log records every step taken from the green-light decision (2026-05-02) through to the Definition of Done in `model_architecture.md` §12. It is appended to as work progresses; existing entries are not edited except to append outcomes.
 
@@ -279,3 +279,18 @@ Phase 5 report gains § 13 ("Phase 5c — generalisation analysis") with the 5c-
 - *Updated Pareto reading*: `kl` for clean-accuracy-preserving naturalistic single-attack robustness; **`kldrop` is the recommended ckpt under the realistic composite threat model** and the only recipe with a fully-revived image branch. `augonly` is now dominated; `kllowmed` is the negative result.
 
 Phase 5 report § 13.4–13.7 backfilled with the actual data; README Phase 5c block rewritten with the final findings.
+
+## Phase 16 — Failure-case narrative (Phase 6, 2026-05-18)
+
+Extended `scripts/failure_analysis.py` from the single-seed/single-recipe Phase-4-S3 baseline to a multi-seed, multi-recipe, composite-aware variant. New behaviour:
+
+- Per-recipe bucket counts (B1..B5) averaged across all 3 seeds with mean ± σ.
+- New bucket `B5_composite_only_failure`: clean-correct, survives every single-cell natural attack, broken only by a composite cell. Backfills the analytical gap left when composite cells were added in Phase 5c.
+- "Consensus residual hotspots" section: examples where every recipe naturally fails (majority bucket B2 or B3 across seeds) — surfaces the 331 dev examples no recipe in the sweep solves.
+- "Where `kldrop` beats `kl`" / "Where `kl` beats `kldrop`" sections: per-example disagreements (majority across seeds) where one recipe is naturally robust and the other naturally fails.
+- `--split {dev,test_seen,test_unseen}` flag so the same script primes for Phase 7 (test-side failure analysis).
+
+The output of `scripts/failure_analysis.py` is now `project_planning/phase4/failure_analysis.md` (extended in place); the Phase 6 narrative built on top of it lives at `project_planning/Phase6_Completion_Report.md`.
+
+**Phase 16 headline finding**: `kldrop` and `kl` recipes trade off **class-asymmetrically**. The 34 examples `kldrop` saves vs `kl` are 33/34 label=0 (non-hate) — the revived image branch prevents text-attack-induced false positives. The 49 examples `kl` saves vs `kldrop` are 46/49 label=1 (hate) — `kl`'s preserved clean accuracy keeps borderline-hate predictions on the right side of the threshold after text attacks erode the margin. Strongest deployment-conditional finding of the project: false-positive-sensitive contexts prefer `kldrop`; recall-sensitive contexts prefer `kl`.
+
