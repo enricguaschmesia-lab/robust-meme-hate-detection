@@ -127,8 +127,16 @@ def _apply_composite(
 
     Components are sampled *without replacement* per modality (we want
     distinct attacks per composite, e.g. two different text edits — not the
-    same one twice). Severity is fixed to the cell level for every component
-    so the cell is interpretable at a single severity.
+    same one twice).
+
+    ``severity`` semantics:
+      - 'low' / 'medium' / 'high': every component uses that single severity
+        (the cell is interpretable at a single severity).
+      - 'mixed': each component independently samples a severity from
+        {low, medium, high} (Phase 9a — closer to a realistic adversarial
+        user who combines a strong edit with a weak edit). Per-component
+        severities are recorded in the components log so the JSON stays
+        self-describing.
 
     Returns (perturbed_text, perturbed_image, components_log).
     """
@@ -147,19 +155,24 @@ def _apply_composite(
     text_picks = rng.sample(text_pool, k=min(k_text, len(text_pool))) if k_text else []
     image_picks = rng.sample(image_pool, k=min(k_image, len(image_pool))) if k_image else []
 
+    _SEV_POOL = ('low', 'medium', 'high')
+    mixed = severity == 'mixed'
+
     out_text = text
     for atk in text_picks:
+        comp_severity = rng.choice(_SEV_POOL) if mixed else severity
         comp_seed = rng.randrange(0, 2 ** 31 - 1)
-        pert = TextPerturbation.from_preset(atk, severity, probability=1.0, seed=comp_seed)
+        pert = TextPerturbation.from_preset(atk, comp_severity, probability=1.0, seed=comp_seed)
         out_text = pert(out_text)
-        components.append({'attack': atk, 'modality': 'text', 'severity_level': severity})
+        components.append({'attack': atk, 'modality': 'text', 'severity_level': comp_severity})
 
     out_image = image
     for atk in image_picks:
+        comp_severity = rng.choice(_SEV_POOL) if mixed else severity
         comp_seed = rng.randrange(0, 2 ** 31 - 1)
-        pert = ImagePerturbation.from_preset(atk, severity, probability=1.0, seed=comp_seed)
+        pert = ImagePerturbation.from_preset(atk, comp_severity, probability=1.0, seed=comp_seed)
         out_image = pert(out_image)
-        components.append({'attack': atk, 'modality': 'image', 'severity_level': severity})
+        components.append({'attack': atk, 'modality': 'image', 'severity_level': comp_severity})
 
     return out_text, out_image, components
 
@@ -470,8 +483,14 @@ def main() -> int:
         text_pool = list(TEXT_MODES)
         image_pool = list(IMAGE_MODES_BENCHMARK)
 
+        # Phase 9a: composite cells additionally get a 'mixed' severity
+        # where each component samples severity ∈ {low, medium, high}
+        # independently — closer to a realistic adversarial user that
+        # mixes strong and weak edits across a composite attack.
+        composite_severities = list(severities) + ['mixed']
+
         for ctype in composite_types:
-            for level in severities:
+            for level in composite_severities:
                 cell_seed = _derive_seed(args.seed, ctype, level)
                 attacked_probs, attacked_labels, attacked_ids, perturbed_texts, all_components = (
                     _eval_composite_cell(
