@@ -1,0 +1,1 @@
+Modality-dropout-rate sweep on dev. x-axis = `modality_dropout_text` (p=0.00 is the `kl` recipe with no dropout). Image-only AUROC (red) rises monotonically with p; clean AUROC (blue) falls. The trade-off shows the Pareto frontier for image-branch revival vs clean accuracy. The dedicated image-only baseline is 0.628.
