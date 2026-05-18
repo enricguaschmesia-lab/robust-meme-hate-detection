@@ -36,15 +36,82 @@ baselines required by the roadmap. See
 Wall-clock per Stage-1 seed: ~140 s on A100 80 GB. Total Phase 1-2 cluster
 budget: < 1 A100-hour.
 
-**Phase 3 (perturbation benchmark) — code merged, label-preservation review in
-progress.** Eight text attacks (`leetspeak`, `char_deletion`, `char_swap`,
-`spacing`, `punctuation`, `case_noise`, `censoring`, `keyboard_typo`) and ten
-image attacks (`gaussian_noise`, `blur`, `compression`, `brightness_up/down`,
-`contrast_up/down`, `translation`, `crop`, `occlusion`) at three severity
-levels each, with deterministic SHA-256-keyed per-cell seeds. Driven by
-`eval/run_perturbed.py` (benchmark) and `eval/inspect_perturbations.py`
-(inspection set for the manual 50–100 label-preservation check). Next: Phase 4
-robustness eval against `stage1-seed{0,1,2}`, then Phase 5 robust training.
+**Phase 3 (perturbation benchmark) — done.** Eight text attacks (`leetspeak`,
+`char_deletion`, `char_swap`, `spacing`, `punctuation`, `case_noise`,
+`censoring`, `keyboard_typo`) and ten image attacks (`gaussian_noise`, `blur`,
+`compression`, `brightness_up/down`, `contrast_up/down`, `translation`, `crop`,
+`occlusion`) at three severity levels each, with deterministic SHA-256-keyed
+per-cell seeds. Severities recalibrated against the manual review notes in
+[`project_planning/perturbations_calibration.md`](project_planning/perturbations_calibration.md).
+Driven by `eval/run_perturbed.py` (benchmark) and
+`eval/inspect_perturbations.py` (inspection set).
+
+**Phase 4 (robustness eval) — done.** Naturalistic benchmark against
+`stage1-seed{0,1,2}` + `baseline-text-seed0` + `baseline-image-seed0`, and an
+L∞ ε ∈ {1,2,4,8}/255 × {FGSM, PGD-10} white-box image-attack sweep against
+the multimodal seeds + image-only baseline (new
+`eval/run_whitebox.py`). Headline: white-box PGD ≥ ε=2/255 fully breaks the
+model (ASR ≥ 0.98); among naturalistic attacks the most damaging are
+high-severity text edits (`censoring`, `char_deletion`, `leetspeak`)
+dropping multimodal AUROC by ~0.11 — and the multimodal model is *more*
+text-fragile than the text-only baseline, suggesting text dominates the
+multimodal decision. Full tables, figures, and worst-case analysis:
+[`project_planning/Phase3_4_Completion_Report.md`](project_planning/Phase3_4_Completion_Report.md)
+and `project_planning/phase4/`. Aggregator: `scripts/aggregate_phase4.py`
+(local, no GPU). Next: Phase 5 robust training (KL consistency loss; severity
+mix weighted toward high-severity text per Phase-4 findings).
+
+**Phase 5 (robust training) — done.** Three robust recipes: `augonly`
+(`BCE_clean + BCE_pert`), `kl` (adds `β·KL_full + γ·KL_image_branch`),
+and `kldrop` (`kl` + per-example text-modality dropout p=0.30, which
+forces the fusion head to make a real image-only prediction 30 % of
+the time). Per-batch on-the-fly text/image augmentation via
+`train/_robust_augmenter.py`, sampling `{text, image, both}` with
+`(0.5, 0.3, 0.2)` weights. Nine trainings + 27 evals.
+
+Headline (3-seed mean), reported under the project's primary threat
+model (naturalistic attacks; white-box PGD reported separately):
+
+- **`kl` is the clean-accuracy-preserving champion**: 0.737 clean AUROC
+  (vs 0.742 clean baseline), naturalistic fully-robust count
+  **105 → 134 / 500** (+28 % relative, the headline robustness win).
+- **`kldrop` revives the dead image branch**: image-only forward AUROC
+  goes **0.593 → 0.636**, exceeding the dedicated image-only baseline
+  of 0.628 (the only recipe to do so). Best per-cell text robustness
+  (worst-cell text ΔAUROC 0.115 → 0.067, 42 % reduction). Cost:
+  0.037 AUROC on clean inputs.
+- **White-box PGD** remains a hard floor for all recipes at ε ≥ 2/255
+  (expected non-target; would require adversarial training).
+
+Full write-up:
+[`project_planning/Phase5_Completion_Report.md`](project_planning/Phase5_Completion_Report.md);
+robust-vs-clean comparison table in `project_planning/phase4/robust_vs_clean.md`.
+
+**Phase 5c (generalisation analysis) — done.** Three orthogonal
+extensions on Phase 5b: in-pool vs OOD attack reporting, composite
+attacks (multiple perturbations per sample), and severity-restricted
+training (`kl_lowmed`).
+
+Findings (3-seed mean):
+
+- **Augmentation gain transfers to held-out image attacks** — Δ(OOD−in)
+  negative for every robust recipe; `kldrop` shows the strongest
+  transfer (Δ −0.005 image OOD).
+- **Composite attacks are the worst threat in the benchmark**:
+  clean-ckpt `composite_2text_2image` at high severity hits ΔAUROC
+  0.145, exceeding the single-cell worst of 0.115. `kldrop` is the
+  strict Pareto winner on every composite cell — cuts the realistic
+  medium-severity `composite_2text` gap by 43 % vs clean
+  (0.090 → 0.051) and `composite_text_image` by 51 % (0.050 → 0.024).
+- **`kl_lowmed` (severity-restricted) is Pareto-dominated by `kl`** —
+  clean negative result: high-severity augmentation is necessary, not
+  optional. Removing it loses 0.5 % AUROC at medium severity and
+  4 dev examples on naturalistic survival.
+
+For the project's primary threat model (internet user combining 1–2
+perturbations at moderate severity), `kldrop` is the recommended ckpt.
+Full write-up in `project_planning/Phase5_Completion_Report.md` § 13;
+data in `project_planning/phase4/robust_vs_clean.md`.
 
 ## Architecture (one-paragraph)
 
@@ -64,6 +131,9 @@ configs/                       Stage and data YAML configs
   stage1.yaml                  Frozen-encoder multimodal training
   stage1_text.yaml             Text-only baseline
   stage1_image.yaml            Image-only baseline
+  stage1_robust_augonly.yaml   Robust trainer: BCE_clean + BCE_pert (no KL)
+  stage1_robust_kl.yaml        Robust trainer: + β·KL_full + γ·KL_image_branch
+  stage1_robust_kl_drop.yaml   Robust trainer: kl + per-example text-modality dropout (p=0.30)
   smoke.yaml                   Short cluster smoke
   data/hateful_memes.yaml      Dataset paths
 src/robust_meme_hate_detection/
@@ -74,9 +144,13 @@ src/robust_meme_hate_detection/
                                (TextPerturbation, ImagePerturbation, ComposePerturbation;
                                 from_preset(level) + SHA-256-keyed seeds)
   train/stage1.py              Frozen-encoder trainer (--modality multimodal|text|image)
+  train/stage1_robust.py       Phase-5 robust trainer (on-the-fly aug + optional KL terms)
+  train/_robust_augmenter.py   RobustAugmenter — per-example text/image perturbation sampler
+  train/_robust_loss.py        binary_kl + robust_loss utilities
   train/baseline_majority.py   Majority-class predict-0 baseline (writes same metrics.json schema)
   eval/run_eval.py             Clean + threshold sweep + PGD eval
   eval/run_perturbed.py        Phase-3 perturbation benchmark (attack × severity grid → JSON)
+  eval/run_whitebox.py         Phase-4 white-box FGSM/PGD ε-sweep (→ whitebox_eval.json)
   eval/inspect_perturbations.py Cluster entrypoint for the label-preservation inspection set
   eval/metrics.py              Accuracy, F1, AUROC, ASR, robustness gap
   utils/                       Seeding, JSON logging, threshold sweep
@@ -87,6 +161,10 @@ scripts/
   inspect_hateful_memes.py     EDA helper
   inspect_perturbations.py     Materialise a per-cell (attack/severity) inspection set
                                for the manual 50–100 label-preservation review
+  aggregate_phase4.py          Local Phase-4/5 aggregator: reads all perturbed_/whitebox_eval.json
+                               + modality_ablation.json under cluster-results/ and writes
+                               project_planning/phase4/ tables + figures (incl. robust_vs_clean.md)
+  failure_analysis.py          Per-example failure bucketing + robust-status annotation
   example_perturbations.py     Legacy perturbation demo on a tiny dataset slice
   cluster_entrypoint.sh        PYTHONPATH wrapper for Run:AI jobs
 cluster/

@@ -68,12 +68,14 @@ SeverityLevel = Literal['low', 'medium', 'high']
 SEVERITY_PRESETS: dict[str, dict[SeverityLevel, float]] = {
     'leetspeak':     {'low': 0.10, 'medium': 0.25, 'high': 0.50},
     'char_deletion': {'low': 0.05, 'medium': 0.10, 'high': 0.20},
-    # char_swap: severity * 10 == absolute swap count.
-    'char_swap':     {'low': 0.10, 'medium': 0.20, 'high': 0.30},
+    # char_swap: severity * 10 == absolute swap count (calibrated to 2/3/5).
+    'char_swap':     {'low': 0.20, 'medium': 0.30, 'high': 0.50},
     'spacing':       {'low': 0.05, 'medium': 0.15, 'high': 0.30},
     'punctuation':   {'low': 0.05, 'medium': 0.10, 'high': 0.20},
     'case_noise':    {'low': 0.10, 'medium': 0.25, 'high': 0.50},
-    'censoring':     {'low': 0.10, 'medium': 0.20, 'high': 0.40},
+    # censoring: reduced from 0.10/0.20/0.40 to be less destructive at all
+    # levels (manual inspection — original "high" erased most of the caption).
+    'censoring':     {'low': 0.05, 'medium': 0.12, 'high': 0.25},
     'keyboard_typo': {'low': 0.05, 'medium': 0.10, 'high': 0.20},
 }
 

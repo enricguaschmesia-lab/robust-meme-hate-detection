@@ -3,10 +3,10 @@
 Each ``ImagePerturbation`` instance applies a single named transformation on
 a PIL image with a configurable severity. Three named severity levels are
 provided via ``SEVERITY_PRESETS`` and ``ImagePerturbation.from_preset``;
-the numbers are chosen to match the roadmap's examples (Gaussian σ
-0.01/0.03/0.05, JPEG quality 80/50/25, brightness/contrast ±10/25/40 %,
-translation/crop 2/5/10 %) and to keep low and medium severities label-
-preserving on 224×224 inputs.
+the numbers were calibrated by manual inspection of an 80-sample-per-cell
+materialisation (see ``project_planning/perturbations_calibration.md``) so
+that low and medium severities remain label-preserving on 224×224 inputs
+while high severities are visibly disruptive.
 
 For reproducibility, each instance optionally owns its own
 ``random.Random`` and ``numpy.random.Generator`` seeded from a single
@@ -46,6 +46,9 @@ IMAGE_MODES = (
     'translation',
     'crop',
     'occlusion',
+    # Phase 4-S2: typographic attack (rendered text overlay; see Goh et al.
+    # "Multimodal Neurons", 2021). Severity controls font size + word pool.
+    'typographic',
 )
 
 # The "benchmark" subset: directional brightness/contrast, no random-sign
@@ -61,26 +64,29 @@ IMAGE_MODES_BENCHMARK = (
     'translation',
     'crop',
     'occlusion',
+    'typographic',
 )
 
 SeverityLevel = Literal['low', 'medium', 'high']
 
 # Per-mode severity presets. The ``severity`` float is interpreted differently
-# per mode; the chosen values reproduce the roadmap examples:
-#   gaussian_noise — std as fraction of [0, 255]: 0.01 / 0.03 / 0.05
-#   blur — PIL Gaussian radius in px; the roadmap's "kernel 3/5/7" maps to
-#          radius (kernel-1)/2 = 1/2/3. So severity*10 (rounded) → radius
-#          1/2/3 for low/medium/high.
-#   compression — quality = 95 - severity*85: 0.176 / 0.529 / 0.824 → q≈80/50/25
-#   brightness_{up,down} / contrast_{up,down} — directional shift of magnitude
-#          severity*0.4: 0.25 / 0.625 / 1.0 → ±10/25/40 %
-#   translation — max shift as fraction of min(W, H): 0.02 / 0.05 / 0.10
-#   crop — symmetric crop fraction per edge: 0.02 / 0.05 / 0.10
-#   occlusion — patch side as fraction of min(W, H): 0.05 / 0.10 / 0.20
+# per mode; values below were calibrated via manual inspection (Phase 3, see
+# project_planning/perturbations_calibration.md):
+#   gaussian_noise — std as fraction of [0, 255]: 0.01 / 0.04 / 0.08
+#   blur — PIL Gaussian radius in px = severity*10 (float):
+#          0.8 / 1.8 / 3.0 for low/medium/high.
+#   compression — quality = 95 - severity*85: 0.176 / 0.647 / 0.941 → q≈80/40/15
+#   brightness_down — directional darkening of magnitude severity*0.8:
+#          0.25 / 0.625 / 1.0 → factors 0.80 / 0.50 / 0.20
+#   brightness_up / contrast_{up,down} — directional shift of magnitude
+#          severity*0.6: 0.25 / 0.625 / 1.0 → factors ±15 / ±37.5 / ±60 %
+#   translation — max shift as fraction of min(W, H): 0.04 / 0.10 / 0.20
+#   crop — symmetric crop fraction per edge: 0.04 / 0.10 / 0.20
+#   occlusion — patch side as fraction of min(W, H): 0.10 / 0.20 / 0.35
 SEVERITY_PRESETS: dict[str, dict[SeverityLevel, float]] = {
-    'gaussian_noise':    {'low': 0.01,  'medium': 0.03,  'high': 0.05},
-    'blur':              {'low': 0.10,  'medium': 0.20,  'high': 0.30},
-    'compression':       {'low': 0.176, 'medium': 0.529, 'high': 0.824},
+    'gaussian_noise':    {'low': 0.01,  'medium': 0.04,  'high': 0.08},
+    'blur':              {'low': 0.08,  'medium': 0.18,  'high': 0.30},
+    'compression':       {'low': 0.176, 'medium': 0.647, 'high': 0.941},
     'brightness_up':     {'low': 0.25,  'medium': 0.625, 'high': 1.00},
     'brightness_down':   {'low': 0.25,  'medium': 0.625, 'high': 1.00},
     'contrast_up':       {'low': 0.25,  'medium': 0.625, 'high': 1.00},
@@ -89,9 +95,22 @@ SEVERITY_PRESETS: dict[str, dict[SeverityLevel, float]] = {
     # sign is random; intended for training augmentation, not for benchmark cells.
     'brightness':        {'low': 0.25,  'medium': 0.625, 'high': 1.00},
     'contrast':          {'low': 0.25,  'medium': 0.625, 'high': 1.00},
-    'translation':       {'low': 0.02,  'medium': 0.05,  'high': 0.10},
-    'crop':              {'low': 0.02,  'medium': 0.05,  'high': 0.10},
-    'occlusion':         {'low': 0.05,  'medium': 0.10,  'high': 0.20},
+    'translation':       {'low': 0.04,  'medium': 0.10,  'high': 0.20},
+    'crop':              {'low': 0.04,  'medium': 0.10,  'high': 0.20},
+    'occlusion':         {'low': 0.10,  'medium': 0.20,  'high': 0.35},
+    # typographic: severity is a sentinel selecting one of three
+    # (font_size, word_pool) buckets — see ``_typographic`` below.
+    'typographic':       {'low': 0.2,   'medium': 0.5,   'high': 0.8},
+}
+
+# Per-mode magnitude for the directional brightness/contrast factor formula
+# (factor = 1 + sign * severity * magnitude). Calibrated so that "high"
+# severity is visibly disruptive without erasing the depicted content.
+_DIRECTIONAL_MAGNITUDES: dict[str, float] = {
+    'brightness_up':   0.6,
+    'brightness_down': 0.8,
+    'contrast_up':     0.6,
+    'contrast_down':   0.6,
 }
 
 
@@ -177,6 +196,7 @@ class ImagePerturbation:
             'translation':     self._translation,
             'crop':            self._crop,
             'occlusion':       self._occlusion,
+            'typographic':     self._typographic,
         }
         return dispatch[self.mode](image)
 
@@ -193,13 +213,13 @@ class ImagePerturbation:
         return Image.fromarray(noisy)
 
     def _blur(self, image: Image.Image) -> Image.Image:
-        """PIL Gaussian blur. severity*10 (rounded) = radius in px.
+        """PIL Gaussian blur. severity*10 = radius in px (float).
 
-        Roadmap axis is "kernel 3/5/7" which corresponds to radius (kernel-1)/2
-        = 1/2/3. The low/medium/high presets pick severity 0.1/0.2/0.3
-        accordingly.
+        Calibration uses sub-integer radii at low/medium (0.8 / 1.8) for a
+        milder effect than the original 1/2/3 quantised mapping; PIL's
+        ``GaussianBlur`` accepts floats.
         """
-        radius = max(1, int(round(self.severity * 10)))
+        radius = max(0.0, self.severity * 10.0)
         return image.filter(ImageFilter.GaussianBlur(radius=radius))
 
     def _compression(self, image: Image.Image) -> Image.Image:
@@ -220,8 +240,14 @@ class ImagePerturbation:
         return 1.0 + sign * self.severity * 0.4
 
     def _directional_factor(self, sign: float) -> float:
-        """Factor 1 + sign*severity*0.4. severity=0 → 1.0; severity=1 → 1.4 or 0.6."""
-        return 1.0 + sign * self.severity * 0.4
+        """Factor 1 + sign*severity*magnitude, where magnitude is per-mode.
+
+        See ``_DIRECTIONAL_MAGNITUDES``; ``brightness_down`` uses 0.8 (so
+        severity=1 → factor 0.2), the other directional modes use 0.6
+        (severity=1 → factor 0.4 or 1.6).
+        """
+        magnitude = _DIRECTIONAL_MAGNITUDES.get(self.mode, 0.4)
+        return 1.0 + sign * self.severity * magnitude
 
     def _brightness(self, image: Image.Image) -> Image.Image:
         factor = self._bidirectional_factor()
@@ -285,3 +311,69 @@ class ImagePerturbation:
             colour = rng.randint(100, 155)
             arr[y:y + mask_size, x:x + mask_size] = colour
         return Image.fromarray(arr)
+
+    # ---------------------------------------------------- typographic attack
+    # Three severity buckets selected by the preset scalar:
+    #   low    (severity ~0.2): small lowercase friendly tags
+    #   medium (severity ~0.5): caps, plausible-looking moderation labels
+    #   high   (severity ~0.8): large bold counter-labels
+    _TYPO_LOW_POOL = ('safe', 'ok', 'fine')
+    _TYPO_MED_POOL = ('SAFE', 'OK', 'NOT HATEFUL')
+    _TYPO_HIGH_POOL = ('NOT HATEFUL', 'FRIENDLY', 'KIND')
+    _TYPO_FONT_PATHS = (
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+        'DejaVuSans-Bold.ttf',
+    )
+
+    def _typographic(self, image: Image.Image) -> Image.Image:
+        from PIL import ImageDraw, ImageFont
+        rng = self._rand()
+        if self.severity < 0.35:
+            font_size, pool = 16, self._TYPO_LOW_POOL
+        elif self.severity < 0.65:
+            font_size, pool = 28, self._TYPO_MED_POOL
+        else:
+            font_size, pool = 40, self._TYPO_HIGH_POOL
+        word = rng.choice(pool)
+
+        font = None
+        for fp in self._TYPO_FONT_PATHS:
+            try:
+                font = ImageFont.truetype(fp, font_size)
+                break
+            except OSError:
+                continue
+        if font is None:
+            # Bitmap default is ~11 px regardless of size; better than nothing.
+            font = ImageFont.load_default()
+
+        out = image.copy()
+        draw = ImageDraw.Draw(out)
+        try:
+            bbox = draw.textbbox((0, 0), word, font=font)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+        except AttributeError:
+            tw, th = draw.textsize(word, font=font)  # PIL < 9.2
+
+        w, h = image.size
+        pad = 4
+        positions = [
+            (pad, pad),
+            (max(pad, w - tw - pad), pad),
+            (pad, max(pad, h - th - pad)),
+            (max(pad, w - tw - pad), max(pad, h - th - pad)),
+        ]
+        x, y = rng.choice(positions)
+        fill_colours = ((255, 255, 255), (255, 255, 0), (255, 255, 255))
+        fill = rng.choice(fill_colours)
+        # Dark rectangle background gives the rendered text enough contrast
+        # to register through CLIP's image encoder even for low severity.
+        box_pad = 2
+        draw.rectangle(
+            [x - box_pad, y - box_pad, x + tw + box_pad, y + th + box_pad],
+            fill=(0, 0, 0),
+        )
+        draw.text((x, y), word, fill=fill, font=font)
+        return out

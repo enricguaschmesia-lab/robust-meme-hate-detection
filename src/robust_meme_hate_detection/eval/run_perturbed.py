@@ -43,6 +43,29 @@ def _derive_seed(base: int, attack: str, level: str) -> int:
     return int.from_bytes(digest[:4], 'big') % (2 ** 31 - 1)
 
 
+def _derive_sample_seed(cell_seed: int, sample_id: str) -> int:
+    """Deterministic sub-seed for one (cell, sample) composite draw."""
+    payload = f"{cell_seed}|{sample_id}".encode('utf-8')
+    digest = hashlib.sha256(payload).digest()
+    return int.from_bytes(digest[:4], 'big') % (2 ** 31 - 1)
+
+
+# Phase 5c-2: composite-attack design.
+COMPOSITE_TYPES: tuple[str, ...] = (
+    'composite_2text',
+    'composite_2image',
+    'composite_text_image',
+    'composite_2text_2image',
+)
+COMPOSITE_K: dict[str, tuple[int, int]] = {
+    # (K_text, K_image)
+    'composite_2text': (2, 0),
+    'composite_2image': (0, 2),
+    'composite_text_image': (1, 1),
+    'composite_2text_2image': (2, 2),
+}
+
+
 def _build_pil_loader(records, image_size: int = 224):
     from PIL import Image
 
@@ -86,6 +109,108 @@ def _forward(model, modality: str, images, tokens):
     if modality == 'image':
         return model.forward_image_only(images)
     raise ValueError(f"Unknown modality: {modality}")
+
+
+def _apply_composite(
+    *,
+    text: str,
+    image,
+    sample_seed: int,
+    text_pool,
+    image_pool,
+    severity: str,
+    k_text: int,
+    k_image: int,
+) -> tuple[str, "object", list[dict[str, Any]]]:
+    """Apply K_text + K_image perturbations sequentially. Deterministic given
+    ``sample_seed``.
+
+    Components are sampled *without replacement* per modality (we want
+    distinct attacks per composite, e.g. two different text edits — not the
+    same one twice). Severity is fixed to the cell level for every component
+    so the cell is interpretable at a single severity.
+
+    Returns (perturbed_text, perturbed_image, components_log).
+    """
+    import random as _r
+
+    from robust_meme_hate_detection.perturbations import (
+        ImagePerturbation,
+        TextPerturbation,
+    )
+
+    rng = _r.Random(sample_seed)
+    components: list[dict[str, Any]] = []
+
+    text_pool = list(text_pool)
+    image_pool = list(image_pool)
+    text_picks = rng.sample(text_pool, k=min(k_text, len(text_pool))) if k_text else []
+    image_picks = rng.sample(image_pool, k=min(k_image, len(image_pool))) if k_image else []
+
+    out_text = text
+    for atk in text_picks:
+        comp_seed = rng.randrange(0, 2 ** 31 - 1)
+        pert = TextPerturbation.from_preset(atk, severity, probability=1.0, seed=comp_seed)
+        out_text = pert(out_text)
+        components.append({'attack': atk, 'modality': 'text', 'severity_level': severity})
+
+    out_image = image
+    for atk in image_picks:
+        comp_seed = rng.randrange(0, 2 ** 31 - 1)
+        pert = ImagePerturbation.from_preset(atk, severity, probability=1.0, seed=comp_seed)
+        out_image = pert(out_image)
+        components.append({'attack': atk, 'modality': 'image', 'severity_level': severity})
+
+    return out_text, out_image, components
+
+
+def _eval_composite_cell(
+    *, model, modality, dataset, text_tfm, device, batch_size,
+    composite_type: str, severity: str, cell_seed: int,
+    text_pool, image_pool,
+) -> tuple[list[float], list[int], list[str], list[str | None], list[list[dict[str, Any]]]]:
+    """Single pass over dataset applying a composite perturbation per sample.
+
+    Per-sample components are drawn deterministically from
+    ``sha256(cell_seed | sample_id)``. Returns probs/labels/ids/perturbed_texts
+    plus the per-sample components log (for the first record of each cell we
+    write a representative entry into the cell JSON).
+    """
+    import torch
+
+    k_text, k_image = COMPOSITE_K[composite_type]
+    probs: list[float] = []
+    labels: list[int] = []
+    ids: list[str] = []
+    perturbed_texts: list[str | None] = []
+    all_components: list[list[dict[str, Any]]] = []
+
+    model.eval()
+    with torch.no_grad():
+        for start in range(0, len(dataset), batch_size):
+            samples_raw = [dataset[i] for i in range(start, min(start + batch_size, len(dataset)))]
+            samples = []
+            for s in samples_raw:
+                sample_seed = _derive_sample_seed(cell_seed, str(s['id']))
+                new_text, new_image, components = _apply_composite(
+                    text=s['text'], image=s['image'],
+                    sample_seed=sample_seed,
+                    text_pool=text_pool, image_pool=image_pool,
+                    severity=severity, k_text=k_text, k_image=k_image,
+                )
+                samples.append({**s, 'text': new_text, 'image': new_image})
+                all_components.append(components)
+
+            img_t, tok_t, lab_t = _to_tensor_batch(samples, text_tfm=text_tfm, device=device)
+            with torch.autocast(
+                device_type=device.type, dtype=torch.bfloat16, enabled=device.type == 'cuda',
+            ):
+                logit = _forward(model, modality, img_t, tok_t)
+            probs.extend(torch.sigmoid(logit.float()).detach().cpu().tolist())
+            labels.extend(int(x) for x in lab_t.tolist())
+            ids.extend(str(s['id']) for s in samples)
+            perturbed_texts.extend(str(s['text']) for s in samples)
+    return probs, labels, ids, perturbed_texts, all_components
 
 
 def _eval_cell(
@@ -150,6 +275,17 @@ def main() -> int:
     )
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument(
+        '--composites', default='none',
+        help=(
+            "'none' (default, back-compat), 'all', or comma-separated subset of "
+            f"{{{','.join(COMPOSITE_TYPES)}}}. Each composite cell applies K "
+            "perturbations per sample (drawn deterministically from "
+            "sha256(cell_seed|sample_id)). Components are sampled from the full "
+            "eval pool (TEXT_MODES + IMAGE_MODES_BENCHMARK), not the training "
+            "pool, so composites also probe OOD generalisation."
+        ),
+    )
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding='utf-8'))
@@ -313,6 +449,75 @@ def main() -> int:
                 f"ASR={cells[-1]['attack_success_rate']:.4f}",
                 flush=True,
             )
+
+    # ---------------- composite cells (Phase 5c-2) ----------------
+    if args.composites and args.composites != 'none':
+        if args.composites == 'all':
+            composite_types: list[str] = list(COMPOSITE_TYPES)
+        else:
+            composite_types = []
+            for c in (s.strip() for s in args.composites.split(',') if s.strip()):
+                if c not in COMPOSITE_TYPES:
+                    raise ValueError(f"Unknown composite type: {c!r}")
+                composite_types.append(c)
+
+        # Component pool: full eval pool (NOT the training pool).
+        text_pool = list(TEXT_MODES)
+        image_pool = list(IMAGE_MODES_BENCHMARK)
+
+        for ctype in composite_types:
+            for level in severities:
+                cell_seed = _derive_seed(args.seed, ctype, level)
+                attacked_probs, attacked_labels, attacked_ids, perturbed_texts, all_components = (
+                    _eval_composite_cell(
+                        model=model, modality=modality, dataset=dataset,
+                        text_tfm=text_tfm, device=device, batch_size=args.batch_size,
+                        composite_type=ctype, severity=level, cell_seed=cell_seed,
+                        text_pool=text_pool, image_pool=image_pool,
+                    )
+                )
+                attacked = classification_metrics(
+                    attacked_probs, attacked_labels, threshold=best_t.threshold,
+                )
+                examples: list[dict[str, Any]] = []
+                for i, (eid, lab, cp, ap) in enumerate(zip(
+                    attacked_ids, attacked_labels, clean_probs, attacked_probs,
+                )):
+                    examples.append({
+                        'id': eid,
+                        'label': int(lab),
+                        'clean_prob': float(cp),
+                        'attacked_prob': float(ap),
+                        'perturbed_text': perturbed_texts[i],
+                        'components': all_components[i],
+                    })
+                k_text, k_image = COMPOSITE_K[ctype]
+                cells.append({
+                    'attack': ctype,
+                    'modality': 'composite',
+                    'severity_level': level,
+                    'severity_float': float('nan'),
+                    'seed': cell_seed,
+                    'n': len(attacked_probs),
+                    'composite': {
+                        'k_text': k_text, 'k_image': k_image,
+                        'text_pool': sorted(text_pool),
+                        'image_pool': sorted(image_pool),
+                    },
+                    'attacked_at_best_threshold': attacked.to_dict(),
+                    'robustness_gap': robustness_gap(clean_at_best, attacked),
+                    'attack_success_rate': attack_success_rate(
+                        clean_probs, attacked_probs, attacked_labels,
+                        threshold=best_t.threshold,
+                    ),
+                    'examples': examples,
+                })
+                print(
+                    f"{ctype:<24s} comp  {level:<6s} "
+                    f"AUROC={attacked.auroc:.4f}  F1={attacked.macro_f1:.4f}  "
+                    f"ASR={cells[-1]['attack_success_rate']:.4f}",
+                    flush=True,
+                )
 
     payload = {
         'ckpt': str(args.ckpt),

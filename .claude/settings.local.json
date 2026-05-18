@@ -4,7 +4,25 @@
       "Bash(git merge *)",
       "Bash(python3 *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(./cluster/cluster.sh sync-code *)",
+      "Bash(bash /tmp/submit_5c2.sh)",
+      "Bash(./cluster/cluster.sh runai-list *)",
+      "Bash(./cluster/cluster.sh job-logs *)",
+      "Bash(./cluster/cluster.sh ssh *)",
+      "Bash(bash /tmp/submit_5c3_train.sh)",
+      "Bash(./cluster/cluster.sh job-delete *)",
+      "Bash(nohup bash /tmp/submit_5c3_evals.sh)",
+      "Bash(echo \"PID=$!\")",
+      "Bash(disown)",
+      "Bash(xxd)",
+      "Bash(kill 65363)",
+      "Bash(chmod +x /tmp/watch_5c_jobs.sh)",
+      "Bash(bash -n /tmp/watch_5c_jobs.sh)",
+      "Bash(./cluster/cluster.sh pull-results *)",
+      "Read(//usr/bin/**)",
+      "Bash(PYTHONPATH=src .venv/bin/python3 scripts/aggregate_phase4.py)",
+      "Bash(PYTHONPATH=src .venv/bin/python3 scripts/failure_analysis.py)"
     ]
   }
 }
