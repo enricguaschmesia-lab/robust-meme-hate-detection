@@ -1,0 +1,70 @@
+{
+  "ckpt": "/scratch/robust-meme-hate-detection/experiments/train-robust-kldrop-p020-seed0/ckpt/best.pt",
+  "split": "test_unseen",
+  "n": 2000,
+  "global_seed": 0,
+  "multimodal": {
+    "at_0.5": {
+      "accuracy": 0.695,
+      "macro_f1": 0.6665704640464571,
+      "auroc": 0.7302890666666667,
+      "precision": 0.6051051051051051,
+      "recall": 0.5373333333333333,
+      "fpr": 0.2104,
+      "fnr": 0.46266666666666667
+    },
+    "best_threshold": 0.45,
+    "at_best_threshold": {
+      "accuracy": 0.686,
+      "macro_f1": 0.6668081494057725,
+      "auroc": 0.7302890666666667,
+      "precision": 0.5792207792207792,
+      "recall": 0.5946666666666667,
+      "fpr": 0.2592,
+      "fnr": 0.4053333333333333
+    }
+  },
+  "text_only": {
+    "at_0.5": {
+      "accuracy": 0.604,
+      "macro_f1": 0.5822855310458895,
+      "auroc": 0.62168,
+      "precision": 0.473551637279597,
+      "recall": 0.5013333333333333,
+      "fpr": 0.3344,
+      "fnr": 0.49866666666666665
+    },
+    "best_threshold": 0.52,
+    "at_best_threshold": {
+      "accuracy": 0.6065,
+      "macro_f1": 0.582555265678113,
+      "auroc": 0.62168,
+      "precision": 0.47600518806744485,
+      "recall": 0.48933333333333334,
+      "fpr": 0.3232,
+      "fnr": 0.5106666666666667
+    }
+  },
+  "image_only": {
+    "at_0.5": {
+      "accuracy": 0.6135,
+      "macro_f1": 0.6013613535561223,
+      "auroc": 0.6535642666666667,
+      "precision": 0.4872364039955605,
+      "recall": 0.5853333333333334,
+      "fpr": 0.3696,
+      "fnr": 0.4146666666666667
+    },
+    "best_threshold": 0.51,
+    "at_best_threshold": {
+      "accuracy": 0.6215,
+      "macro_f1": 0.6070911483656523,
+      "auroc": 0.6535642666666667,
+      "precision": 0.49596309111880044,
+      "recall": 0.5733333333333334,
+      "fpr": 0.3496,
+      "fnr": 0.4266666666666667
+    }
+  },
+  "elapsed_seconds": 57.008624792099
+}

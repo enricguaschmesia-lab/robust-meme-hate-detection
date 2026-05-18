@@ -189,3 +189,106 @@ The untuned `modality_dropout_text = 0.30` default in the original
 delivers the same image-branch revival at no clean-accuracy cost
 on any of dev / test_seen / test_unseen, and becomes the new
 recommended default for the project's naturalistic threat model.
+
+## 5. Finer sweep verification — Phase 9c
+
+The original Phase 9b sweep tested 4 points (p ∈ {0, 0.15, 0.30, 0.50})
+and concluded p=0.15 was the Pareto winner. To rule out a local-
+optimum artefact, Phase 9c added 3 intermediate points (p ∈ {0.10,
+0.20, 0.25}) for a final 7-point grid. 9 new training jobs + 81 new
+eval jobs, all under the same hyperparameters except
+`modality_dropout_text`.
+
+### 5.1 Full 7-point sweep on dev / test_seen / test_unseen
+
+3-seed mean ± σ. Clean and image-only AUROC are the headline Pareto
+axes; worst-cell text Δ and composite_2text med Δ characterise the
+robustness side.
+
+**Dev (n=500):**
+
+| p | Recipe | Clean AUROC | Image-only AUROC | Worst-cell text Δ | Composite_2text med Δ |
+|---:|---|---:|---:|---:|---:|
+| 0.00 | kl | **0.737** | 0.611 | 0.090 | 0.066 |
+| 0.10 | kldrop-p010 | 0.713 | 0.631 | 0.073 | 0.055 |
+| **0.15** | **kldrop-p015** | 0.735 | 0.638 | 0.081 | 0.059 |
+| 0.20 | kldrop-p020 | 0.728 | 0.639 | 0.076 | 0.059 |
+| **0.25** | **kldrop-p025** | 0.733 | 0.644 | 0.077 | 0.059 |
+| 0.30 | kldrop (dominated) | 0.705 | 0.636 | 0.067 | 0.051 |
+| 0.50 | kldrop-p050 | 0.700 | 0.641 | **0.065** | **0.046** |
+
+**test_seen (n=1000, 49 % pos):**
+
+| p | Recipe | Clean AUROC | Image-only AUROC | Worst-cell text Δ | Composite_2text med Δ |
+|---:|---|---:|---:|---:|---:|
+| 0.00 | kl | 0.745 | 0.605 | 0.086 | 0.064 |
+| 0.10 | kldrop-p010 | 0.723 | 0.635 | 0.075 | 0.052 |
+| 0.15 | kldrop-p015 | **0.748** | 0.638 | 0.087 | 0.064 |
+| 0.20 | kldrop-p020 | 0.739 | 0.641 | 0.082 | 0.060 |
+| **0.25** | **kldrop-p025** | 0.747 | 0.647 | 0.083 | 0.059 |
+| 0.30 | kldrop (dominated) | 0.721 | 0.641 | 0.074 | 0.050 |
+| 0.50 | kldrop-p050 | 0.717 | 0.651 | **0.068** | **0.046** |
+
+**test_unseen (n=2000, 37.5 % pos):**
+
+| p | Recipe | Clean AUROC | Image-only AUROC | Worst-cell text Δ | Composite_2text med Δ |
+|---:|---|---:|---:|---:|---:|
+| 0.00 | kl | 0.738 | 0.628 | 0.065 | 0.052 |
+| 0.10 | kldrop-p010 | 0.716 | 0.653 | 0.055 | 0.038 |
+| 0.15 | kldrop-p015 | **0.743** | 0.658 | 0.069 | 0.054 |
+| 0.20 | kldrop-p020 | 0.729 | 0.662 | 0.061 | 0.046 |
+| **0.25** | **kldrop-p025** | 0.741 | **0.668** | 0.063 | 0.049 |
+| 0.30 | kldrop (dominated) | 0.713 | 0.655 | 0.055 | 0.039 |
+| 0.50 | kldrop-p050 | 0.712 | 0.666 | **0.049** | **0.035** |
+
+### 5.2 Refined Pareto reading
+
+The finer sweep refines but does not overturn the Phase 9b finding:
+
+- **`kldrop-p015` and `kldrop-p025` are both Pareto-optimal** on the
+  (clean AUROC, image-only AUROC) plane. On *every* split, the two
+  recipes' clean AUROCs are within σ (≤ 0.002 difference); on
+  test_unseen, `kldrop-p025` has image-only AUROC +0.010 above
+  `kldrop-p015`. On worst-cell text Δ and composite_2text med Δ,
+  `kldrop-p025` is marginally better on test_seen and test_unseen.
+- **The Phase 9b "the first 15 % of dropout is free" rule generalises**:
+  the clean AUROC penalty stays inside seed noise through p ≤ 0.25,
+  then kicks in by p = 0.30. The image-branch revival saturates more
+  gradually than Phase 9b's coarse sweep suggested.
+- **`kldrop-p010` is anomalously volatile** (clean AUROC σ ≈ 0.028
+  on dev vs ≤ 0.008 for the other rates) — one of its 3 seeds
+  underperformed clean accuracy. Not recommended.
+- **`kldrop-p050` remains the strongest composite defender** with the
+  largest clean-accuracy cost (~3 pp).
+
+### 5.3 Updated recommendation
+
+**Both `kldrop-p015` and `kldrop-p025` are defensible as the
+recommended default** for the project's primary threat model. The
+practical choice between them is within seed noise on clean AUROC;
+`kldrop-p025` has a marginal edge on robustness metrics (image-only
++0.010 on test_unseen, composite_2text med −0.005). Where this
+report and the poster cite a single recommendation, `kldrop-p015`
+is kept for narrative continuity with earlier phases, but readers
+should treat the (p=0.15, p=0.25) pair as the Pareto-front region
+on this architecture rather than a single point optimum.
+
+**Methodological lesson reinforced**: the original "kldrop pays 0.03
+clean AUROC for image-branch revival" claim from Phase 5b/7 turns
+out to be a coarse-sweep artefact at both p=0.30 and the original
+Phase 9b winner p=0.15. The actual Pareto front sits at
+p ∈ [0.15, 0.25] with no clean-accuracy cost relative to `kl`.
+
+### 5.4 Phase 10 closures (this section)
+
+This section closes the limitations bullets opened in § 6:
+
+- ✅ Coarse sweep — extended to 7 points spanning 0 to 0.50.
+- ✅ No re-run of failure_analysis — closed in
+  `Phase8_TestFailure_Report.md` § 8.
+- ✅ Threshold-tuning data leak — addressed via the
+  "Deployment-honest threshold" section in `robust_vs_clean.test_*.md`.
+
+Remaining limitations from § 6 (unchanged): no `modality_dropout_image`
+sweep; 3 seeds per rate; global optimality not claimed outside the
+tested range.

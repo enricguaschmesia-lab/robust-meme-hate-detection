@@ -397,8 +397,17 @@ def fig_severity_curves(perturbed_all):
 
 def fig_dropout_sweep(perturbed_all, modality_all):
     plt = _plt()
-    # p in {0.00 (= kl), 0.15, 0.30 (kldrop), 0.50}
-    p_to_recipe = [(0.00, "kl"), (0.15, "kldrop-p015"), (0.30, "kldrop"), (0.50, "kldrop-p050")]
+    # Phase 9c finer sweep: 7-point grid p ∈ {0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.50}.
+    # p=0 is the kl recipe (no dropout); p=0.30 is the original kldrop (now Pareto-dominated).
+    p_to_recipe = [
+        (0.00, "kl"),
+        (0.10, "kldrop-p010"),
+        (0.15, "kldrop-p015"),
+        (0.20, "kldrop-p020"),
+        (0.25, "kldrop-p025"),
+        (0.30, "kldrop"),
+        (0.50, "kldrop-p050"),
+    ]
     fig, ax1 = plt.subplots(figsize=(7, 4.5))
     ax2 = ax1.twinx()
 
