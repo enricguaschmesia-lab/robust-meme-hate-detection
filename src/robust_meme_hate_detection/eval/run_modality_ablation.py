@@ -37,6 +37,10 @@ def main() -> int:
     parser.add_argument('--config', required=True)
     parser.add_argument('--out', required=True)
     parser.add_argument('--split', default='dev')
+    parser.add_argument(
+        '--dataset-root', default=None,
+        help='Override data.dataset_root from --config (for held-out test eval).',
+    )
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--batch-size', type=int, default=64)
     args = parser.parse_args()
@@ -63,7 +67,8 @@ def main() -> int:
     data_cfg = cfg['data']
 
     text_tfm = ClipTokenize(arch=model_cfg['arch'])
-    records = load_hateful_memes_records(Path(data_cfg['dataset_root']), args.split)
+    dataset_root = args.dataset_root or data_cfg['dataset_root']
+    records = load_hateful_memes_records(Path(dataset_root), args.split)
     records = [r for r in records if r.label is not None]
     dataset = _build_pil_loader(records)
 

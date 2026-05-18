@@ -1,4 +1,4 @@
-# Implementation Worklog — Phases 1–16
+# Implementation Worklog — Phases 1–17
 
 This log records every step taken from the green-light decision (2026-05-02) through to the Definition of Done in `model_architecture.md` §12. It is appended to as work progresses; existing entries are not edited except to append outcomes.
 
@@ -293,4 +293,26 @@ Extended `scripts/failure_analysis.py` from the single-seed/single-recipe Phase-
 The output of `scripts/failure_analysis.py` is now `project_planning/phase4/failure_analysis.md` (extended in place); the Phase 6 narrative built on top of it lives at `project_planning/Phase6_Completion_Report.md`.
 
 **Phase 16 headline finding**: `kldrop` and `kl` recipes trade off **class-asymmetrically**. The 34 examples `kldrop` saves vs `kl` are 33/34 label=0 (non-hate) — the revived image branch prevents text-attack-induced false positives. The 49 examples `kl` saves vs `kldrop` are 46/49 label=1 (hate) — `kl`'s preserved clean accuracy keeps borderline-hate predictions on the right side of the threshold after text attacks erode the margin. Strongest deployment-conditional finding of the project: false-positive-sensitive contexts prefer `kldrop`; recall-sensitive contexts prefer `kl`.
+
+## Phase 17 — Held-out test eval (Phase 7, 2026-05-18)
+
+All Phase 5/5c numbers so far were dev-only. Phase 7 reproduces the headline tables on the labelled held-out test split(s).
+
+**Test data acquisition.** Found `test_seen.jsonl` (1000 ex, 49% pos) and `test_unseen.jsonl` (2000 ex, 37.5% pos) labelled on the `neuralcatcher/hateful_memes` HF mirror. Verified bit-perfect ID + text overlap between `test_seen.jsonl` and the cluster's unlabelled `/scratch/datasets/hate_meta/test.jsonl`. Saved both labelled jsonls to `data/processed/splits/test_{seen,unseen}_labels.jsonl`. test_unseen images (2000 NEW PNGs not in phase-1 release) downloaded from `limjiayi/hateful_memes_expanded` HF mirror via `urllib.request` with a small parallel pool (HF rate-limits @ 24 concurrent → dropped to 6) and rsynced to cluster writable scratch.
+
+**Cluster staging.** Built a labelled-test mirror at `/scratch/robust-meme-hate-detection/data/test_labels/` containing both jsonls, a symlink `img -> /scratch/datasets/hate_meta/img` (test_seen IDs were already in the staged dataset's 10 000 PNGs), and a flat `img_test_unseen/` with the 2000 test_unseen PNGs. test_unseen jsonl `img` paths rewritten to `img_test_unseen/<id>.png` so the loader's relative-path resolution finds them.
+
+**Code changes.** Three eval entrypoints (`run_perturbed`, `run_whitebox`, `run_modality_ablation`) gained a `--dataset-root` CLI override (lets the test eval point at the mirror without authoring sibling configs). `scripts/aggregate_phase4.py` made split-aware via a regex on the `cluster-results/{kind}-...-test-{seen|unseen}-seed{N}` job-name suffix; legacy dev jobs keep their existing naming and dev outputs are byte-identical to the pre-extension version. All eval write functions take an optional `split` arg that suffixes their output filename (e.g. `robust_vs_clean.test_seen.md`).
+
+**Cluster runs.** 90 jobs submitted (5 recipes × 3 seeds × 2 splits × 3 eval kinds). Initial submission caught a job-name validation rule (Run:AI rejects underscores in job names — split tag had to be `test-seen` not `test_seen`); fixed by hyphenating the tag while keeping the underscored `--split` value. Second failure batch (~18 jobs) was the kldrop config naming: my submit script used `configs/stage1_robust_kldrop.yaml` but the actual file is `stage1_robust_kl_drop.yaml` — fixed via a case statement.
+
+**Phase 17 outcomes (2026-05-18, all 90 jobs Succeeded, results pulled):**
+
+- *Headline reproduction holds*: `kldrop` remains the worst-cell text Δ winner on every split (0.067 dev → 0.074 test_seen → 0.055 test_unseen — the project's lowest single-cell text gap is on held-out test). Image-only AUROC for `kldrop` is 0.641 (test_seen) and 0.655 (test_unseen), exceeding the dedicated image-only baseline (0.628) on every split. `kl` preserves clean AUROC tightly on both test splits (0.745 / 0.738 vs clean baseline 0.747 / 0.738).
+- *Composite winner reproduces*: `kldrop` cuts medium-severity composite_2text by 43 % on test_seen (0.087 → 0.050) and ties augonly on test_unseen (0.049). Wins 3/4 composite-medium cells on both test splits.
+- *Generalisation (OOD) reproduces*: every recipe shows Δ(OOD−in) image negative on both test splits, same magnitude as dev. The Phase 5c-1 claim — augmentation gains transfer to held-out image attacks — holds on test.
+- *`kllowmed` softens, doesn't fully refute*: on test_unseen `kllowmed` has the highest naturalistic-robust count (387 / 2000) — beating `kl` (372.7). But `kl` still wins on worst-cell text Δ, image-only AUROC, and composite_2text medium Δ. The Phase 5c-3 "strict Pareto-dominated" claim doesn't hold on test_unseen; the right framing is "borderline result, dominated on every metric except naturalistic count on the naturalistic-prior split."
+- *Updated Pareto recommendation*: `kldrop` for the realistic composite threat model (recommended ckpt); `kl` for clean-accuracy-preserving; `augonly` promoted from "dominated" to "secondary alternative" (test_seen worst-cell text Δ is competitive); `kllowmed` is the borderline case; `clean` is dominated.
+
+Full write-up in `project_planning/Phase7_Completion_Report.md`. Per-split data tables: `phase4/{robust_vs_clean,perturbed_table,whitebox_table,worst_case}.test_seen.md` and `.test_unseen.md`. Per-split figures: `phase4/figures/*.test_seen.png` and `.test_unseen.png`.
 

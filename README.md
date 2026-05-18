@@ -127,6 +127,44 @@ false-positive-sensitive contexts prefer `kldrop`; recall-sensitive
 contexts prefer `kl`. Full write-up in
 `project_planning/Phase6_Completion_Report.md`.
 
+**Phase 7 (held-out test evaluation) — done.** All five recipes
+re-evaluated on the labelled `test_seen` (n=1000, 49 % pos) and
+`test_unseen` (n=2000, 37.5 % pos) splits. 90 cluster jobs
+(5 recipes × 3 seeds × 2 splits × 3 eval kinds). Labelled jsonls
+acquired from the `neuralcatcher/hateful_memes` HF mirror; the
+2000 test_unseen images sourced from `limjiayi/hateful_memes_expanded`
+and staged on cluster scratch. All numbers in
+`project_planning/phase4/robust_vs_clean.test_seen.md` and
+`robust_vs_clean.test_unseen.md`.
+
+Headline reproductions:
+
+- **`kldrop` is the worst-cell text robustness winner on every split**
+  (0.067 dev → 0.074 test_seen → **0.055 test_unseen** — the
+  project's lowest single-cell text gap is on the held-out
+  naturalistic-prior split).
+- **`kldrop` image-only AUROC exceeds the dedicated image-only baseline
+  on every split** (0.636 dev / 0.641 test_seen / **0.655 test_unseen**
+  vs baseline 0.628). Modality dropout's image-branch revival
+  generalises to held-out data.
+- **`kl` preserves clean AUROC on both test splits within seed noise**
+  (0.745 vs clean 0.747 on test_seen; 0.738 = clean 0.738 on
+  test_unseen).
+- **`kldrop` is the medium-severity composite winner on 3/4 cells**
+  on test_seen and test_unseen (matches dev).
+- **`kllowmed` partial refutation**: unexpectedly has the highest
+  naturalistic-robust count on test_unseen (387 / 2000) — beating
+  `kl` (372.7). The Phase 5c-3 "strictly Pareto-dominated" claim
+  doesn't hold on the naturalistic-prior test split; recipe is now
+  reported as a borderline case rather than a clean negative
+  result.
+
+Updated Pareto recommendation: `kldrop` for the realistic composite
+threat model (project's recommended ckpt); `kl` for clean-accuracy-
+preserving; `augonly` promoted to "secondary alternative" on
+test_seen; `kllowmed` is the borderline result. Full write-up in
+`project_planning/Phase7_Completion_Report.md`.
+
 ## Architecture (one-paragraph)
 
 OpenCLIP ViT-B/32 (`laion2b_s34b_b79k`) image and text encoders, frozen by
