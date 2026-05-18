@@ -104,23 +104,30 @@ def _load_captions(split: str) -> dict[str, dict[str, Any]]:
 
 # ---------------------------------------------------------------- per (recipe, seed) loaders
 
-def _job_dir(kind: str, recipe: str, seed: int) -> Path | None:
-    """Resolve cluster-results/{kind}-{recipe-resolved}-seed{N}/ for the given recipe.
+def _job_dir(kind: str, recipe: str, seed: int, split: str = 'dev') -> Path | None:
+    """Resolve cluster-results/{kind}-{recipe-resolved}{-split-tag}-seed{N}/.
 
-    `recipe='stage1'`  -> e.g. `perturbed-stage1-seed0`
-    `recipe='kl'`      -> e.g. `perturbed-robust-kl-seed0`
-    `recipe='kldrop'`  -> e.g. `perturbed-robust-kldrop-seed0`
+    `recipe='stage1'`  -> e.g. `perturbed-stage1-seed0`            (dev)
+    `recipe='kl'`      -> e.g. `perturbed-robust-kl-seed0`         (dev)
+    `recipe='kldrop'`, split='test_seen' ->
+                          `perturbed-robust-kldrop-test-seen-seed0`
     """
     if recipe in ('stage1', 'clean'):
-        suffix = f'stage1-seed{seed}'
+        base = f'stage1-seed{seed}'
+        if split != 'dev':
+            split_tag = split.replace('_', '-')
+            base = f'stage1-{split_tag}-seed{seed}'
     else:
-        suffix = f'robust-{recipe}-seed{seed}'
-    p = RESULTS / f'{kind}-{suffix}'
+        base = f'robust-{recipe}-seed{seed}'
+        if split != 'dev':
+            split_tag = split.replace('_', '-')
+            base = f'robust-{recipe}-{split_tag}-seed{seed}'
+    p = RESULTS / f'{kind}-{base}'
     return p if p.exists() else None
 
 
-def _load_perturbed(recipe: str, seed: int) -> dict[str, Any] | None:
-    d = _job_dir('perturbed', recipe, seed)
+def _load_perturbed(recipe: str, seed: int, split: str = 'dev') -> dict[str, Any] | None:
+    d = _job_dir('perturbed', recipe, seed, split)
     if d is None:
         return None
     fp = d / 'perturbed_eval.json'
@@ -129,8 +136,8 @@ def _load_perturbed(recipe: str, seed: int) -> dict[str, Any] | None:
     return json.loads(fp.read_text())
 
 
-def _load_whitebox(recipe: str, seed: int) -> dict[str, Any] | None:
-    d = _job_dir('whitebox', recipe, seed)
+def _load_whitebox(recipe: str, seed: int, split: str = 'dev') -> dict[str, Any] | None:
+    d = _job_dir('whitebox', recipe, seed, split)
     if d is None:
         return None
     fp = d / 'whitebox_eval.json'
@@ -235,16 +242,17 @@ def _build_full_table(
     recipes: list[str],
     seeds: list[int],
     captions: dict[str, dict[str, Any]],
+    split: str = 'dev',
 ) -> tuple[dict[str, dict[str, Any]], list[tuple[str, int]]]:
     """Return ({rid -> {label, text, img, by_seed: {(recipe,seed) -> entry+bucket}}}, available_pairs)."""
     available: list[tuple[str, int]] = []
     table: dict[str, dict[str, Any]] = {}
     for recipe in recipes:
         for seed in seeds:
-            pert = _load_perturbed(recipe, seed)
+            pert = _load_perturbed(recipe, seed, split)
             if pert is None:
                 continue
-            wb = _load_whitebox(recipe, seed)
+            wb = _load_whitebox(recipe, seed, split)
             seed_tab = _build_seed_table(pert, wb)
             if not seed_tab:
                 continue
@@ -467,7 +475,7 @@ def _format_composite_only_entry(entry: dict[str, Any], recipe: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--seeds', default='0,1,2', help='Comma-separated seeds (default 0,1,2)')
-    ap.add_argument('--recipes', default='stage1,augonly,kl,kldrop,kllowmed',
+    ap.add_argument('--recipes', default='stage1,augonly,kl,kldrop,kldrop-p015,kldrop-p050,kllowmed',
                     help='Comma-separated recipes (default all 5). Use "stage1" or "clean" for the baseline.')
     ap.add_argument('--split', default='dev', choices=('dev', 'test_seen', 'test_unseen'),
                     help='Which eval split this analysis is for. Affects caption-file lookup. Default dev.')
@@ -481,7 +489,7 @@ def main() -> int:
     recipes = ['stage1' if r == 'clean' else r for r in recipes]
 
     captions = _load_captions(args.split)
-    table, available = _build_full_table(recipes, seeds, captions)
+    table, available = _build_full_table(recipes, seeds, captions, split=args.split)
     if not available:
         print("No eval JSONs found for any (recipe, seed) — nothing to do.")
         return 1

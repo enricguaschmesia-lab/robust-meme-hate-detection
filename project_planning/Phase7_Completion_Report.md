@@ -257,6 +257,24 @@ robustness, `kl` for clean-preservation, and note the class-asymmetric
 per-example deployment story from Phase 6 §4 (kldrop's per-example
 wins concentrate on label=0; kl's on label=1).
 
+**Update from Phase 9b (modality-dropout-rate sweep, 2026-05-18):**
+the untuned `modality_dropout_text = 0.30` in `kldrop` was *not*
+Pareto-optimal. `kldrop-p015` (p=0.15) matches `kldrop`'s image-only
+AUROC on every split while preserving clean AUROC within seed noise
+of `kl`. **New recommended default: `kldrop-p015`**, with
+`kldrop-p050` as the conservative-paranoid alternative for
+composite-heaviest threat models. The original `kldrop` (p=0.30)
+is now Pareto-dominated by `kldrop-p015`. See
+`project_planning/Phase9b_DropoutSweep_Report.md`.
+
+**Update from Phase 8 (test-side failure analysis):** the Phase 6
+class-asymmetric finding reproduces in direction on test but with
+much smaller effect size — kldrop-wins skew label=0 (66 % test_seen,
+71 % test_unseen) but kl-wins break on test_unseen (43 % label=1).
+The defensible held-out claim is "kldrop systematically reduces
+text-attack false positives on non-hate examples"; the kl-side
+class story does not generalise.
+
 ## 7. White-box PGD on test (for completeness)
 
 PGD ε ≥ 2/255 still drives AUROC to ≈ 0 on every recipe on both
@@ -267,12 +285,11 @@ reported separately in `phase4/whitebox_table.test_seen.md` and
 
 ## 8. Limitations
 
-- **No test-set per-example failure analysis written**. Phase 6's
-  narrative is dev-only. The class-asymmetric `kldrop` vs `kl`
-  trade-off (33/34 kldrop-wins are label=0; 46/49 kl-wins are
-  label=1 on dev) is *predicted* to hold on test; verifying needs
-  running `scripts/failure_analysis.py --split test_seen` and
-  inspecting the disagreement examples. Left as a follow-up.
+- **Test-set per-example failure analysis**: *closed in Phase 8*
+  (`project_planning/Phase8_TestFailure_Report.md`). The
+  class-asymmetric kldrop-wins-toward-label=0 claim reproduces
+  with smaller effect size; the kl-wins-toward-label=1 claim
+  breaks on test_unseen.
 - **`kllowmed` on test_unseen partially refutes the Phase 5c-3
   dev claim.** The single-split, single-seed comparison framing was
   too narrow. The right statement is "kllowmed is dominated by kl
