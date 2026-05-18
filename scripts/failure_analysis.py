@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random as _random
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import mean, pstdev
@@ -348,6 +349,28 @@ def _consensus_natural_failures(
     return out
 
 
+def _bootstrap_ci(samples: list[int], n_boot: int = 2000, ci: float = 0.95,
+                  rng_seed: int = 0) -> tuple[float, float, float]:
+    """Percentile bootstrap CI on the mean of a 0/1-valued sample.
+
+    samples: list of 0/1 values (e.g. label == 0 indicator for each disagreement
+    example). Returns (mean, lower, upper) of the bootstrap distribution at the
+    given CI level. Deterministic given rng_seed.
+    """
+    if not samples:
+        return 0.0, 0.0, 0.0
+    rng = _random.Random(rng_seed)
+    n = len(samples)
+    means: list[float] = []
+    for _ in range(n_boot):
+        resample = [samples[rng.randrange(n)] for _ in range(n)]
+        means.append(sum(resample) / n)
+    means.sort()
+    lower = means[int((1 - ci) / 2 * n_boot)]
+    upper = means[int((1 + ci) / 2 * n_boot) - 1]
+    return sum(samples) / n, lower, upper
+
+
 def _disagreement_examples(
     table: dict[str, dict[str, Any]],
     recipe_a: str,
@@ -481,6 +504,17 @@ def main() -> int:
                     help='Which eval split this analysis is for. Affects caption-file lookup. Default dev.')
     ap.add_argument('--out', default=None,
                     help='Output markdown path. Default: project_planning/phase4/failure_analysis[.split].md')
+    ap.add_argument(
+        '--pairs',
+        default='kldrop-p015:kl,kldrop-p015:kldrop,kldrop:kl',
+        help='Comma-separated recipe_a:recipe_b pairs. For each pair, emit '
+             '"Where A beats B" / "Where B beats A" sections with bootstrap '
+             'CIs on the label distribution of the disagreement set. Default '
+             'covers the Phase 10 refresh pairs (kldrop-p015 vs kl + vs kldrop, '
+             'and the original kldrop vs kl for comparison).',
+    )
+    ap.add_argument('--bootstrap-n', type=int, default=2000,
+                    help='Bootstrap resamples for the disagreement CIs (default 2000).')
     args = ap.parse_args()
 
     seeds = [int(s) for s in args.seeds.split(',') if s.strip()]
@@ -498,12 +532,31 @@ def main() -> int:
 
     # Cross-recipe analyses
     consensus = _consensus_natural_failures(table, recipes, seeds)
-    a_wins, b_wins = ([], [])
-    if 'kldrop' in recipes and 'kl' in recipes:
-        a_wins, b_wins = _disagreement_examples(table, 'kldrop', 'kl', seeds)
     composite_only_by_recipe: dict[str, list[dict[str, Any]]] = {
         r: _composite_only_per_recipe(table, r, seeds) for r in recipes
     }
+
+    # Phase-10 multi-pair disagreement analysis with bootstrap CIs
+    raw_pairs = [p.strip() for p in args.pairs.split(',') if p.strip()]
+    pair_results: list[dict[str, Any]] = []
+    for pair_spec in raw_pairs:
+        if ':' not in pair_spec:
+            print(f"  skipping malformed --pairs entry: {pair_spec!r}")
+            continue
+        ra, rb = (s.strip() for s in pair_spec.split(':', 1))
+        if ra not in recipes or rb not in recipes:
+            print(f"  skipping pair {ra}:{rb} (one or both recipes not in --recipes)")
+            continue
+        a_wins, b_wins = _disagreement_examples(table, ra, rb, seeds)
+        a_lbl0 = [1 if e['label'] == 0 else 0 for e in a_wins]
+        b_lbl1 = [1 if e['label'] == 1 else 0 for e in b_wins]
+        ci_a = _bootstrap_ci(a_lbl0, n_boot=args.bootstrap_n)
+        ci_b = _bootstrap_ci(b_lbl1, n_boot=args.bootstrap_n)
+        pair_results.append({
+            'a': ra, 'b': rb,
+            'a_wins': a_wins, 'b_wins': b_wins,
+            'ci_a_label0': ci_a, 'ci_b_label1': ci_b,
+        })
 
     # ----- write -----
     out: list[str] = []
@@ -560,30 +613,44 @@ def main() -> int:
             out.append(f'(+{len(consensus_sorted) - 15} more in the consensus-failure set; '
                        f'full list available in the JSON dump below.)\n')
 
-    # 3. Where kldrop beats kl
-    if 'kldrop' in recipes and 'kl' in recipes:
-        out.append(f'## 3. Where `kldrop` beats `kl` (n={len(a_wins)})\n')
-        out.append('Examples where `kldrop`\'s majority bucket is B1_robust and `kl` is naturally failing '
-                   '(B2 or B3) — kldrop-specific fixes.\n')
+    # 3. Per-pair disagreement analysis with bootstrap CIs (Phase 10 refresh)
+    sec_num = 3
+    for pr in pair_results:
+        ra, rb = pr['a'], pr['b']
+        a_wins = pr['a_wins']; b_wins = pr['b_wins']
+        m_a, lo_a, hi_a = pr['ci_a_label0']
+        m_b, lo_b, hi_b = pr['ci_b_label1']
+        out.append(f"## {sec_num}. Where `{ra}` beats `{rb}` (n={len(a_wins)})\n")
+        out.append(f"Examples where `{ra}`'s majority bucket is naturally-robust (B1 or B4) "
+                   f"and `{rb}`'s is naturally-failing (B2/B3/B5).")
+        if a_wins:
+            out.append(f"label=0 share: **{m_a * 100:.0f} %** "
+                       f"(95 % CI: {lo_a * 100:.0f}–{hi_a * 100:.0f} %, n={len(a_wins)})")
+        out.append('')
         a_wins_sorted = sorted(a_wins, key=lambda e: e['id'])
         for e in a_wins_sorted[:8]:
-            out.append(_format_disagreement_entry(e, 'kldrop', 'kl', seeds))
+            out.append(_format_disagreement_entry(e, ra, rb, seeds))
             out.append('')
         if len(a_wins_sorted) > 8:
             out.append(f'(+{len(a_wins_sorted) - 8} more.)\n')
+        sec_num += 1
 
-        out.append(f'## 4. Where `kl` beats `kldrop` (n={len(b_wins)})\n')
-        out.append('Reverse direction — `kl`-specific fixes. Tradeoff cases where `kldrop`\'s '
-                   'clean-accuracy cost manifests at the per-example level.\n')
+        out.append(f"## {sec_num}. Where `{rb}` beats `{ra}` (n={len(b_wins)})\n")
+        out.append(f"Reverse direction — `{rb}`-specific fixes.")
+        if b_wins:
+            out.append(f"label=1 share: **{m_b * 100:.0f} %** "
+                       f"(95 % CI: {lo_b * 100:.0f}–{hi_b * 100:.0f} %, n={len(b_wins)})")
+        out.append('')
         b_wins_sorted = sorted(b_wins, key=lambda e: e['id'])
         for e in b_wins_sorted[:8]:
-            out.append(_format_disagreement_entry(e, 'kldrop', 'kl', seeds))
+            out.append(_format_disagreement_entry(e, ra, rb, seeds))
             out.append('')
         if len(b_wins_sorted) > 8:
             out.append(f'(+{len(b_wins_sorted) - 8} more.)\n')
+        sec_num += 1
 
-    # 5. Composite-only failures per recipe
-    out.append(f'## 5. Composite-only failures (B5) — examples robust to single-cell, broken by composites\n')
+    # Composite-only failures per recipe
+    out.append(f'## {sec_num}. Composite-only failures (B5) — examples robust to single-cell, broken by composites\n')
     out.append('Per recipe count (majority across seeds):\n')
     out.append('| Recipe | B5 count |')
     out.append('|---|---:|')
@@ -600,8 +667,9 @@ def main() -> int:
             out.append(_format_composite_only_entry(e, r))
             out.append('')
 
-    # 6. Limitations
-    out.append('## 6. Limitations of this analysis\n')
+    # Limitations
+    sec_num += 1
+    out.append(f'## {sec_num}. Limitations of this analysis\n')
     out.append('- Single eval split (`%s`); recipe-seed counts are point estimates per seed averaged across '
                '3 seeds — small samples.' % args.split)
     out.append('- `B5_composite_only_failure` and `B4_pgd_only` are *strict* — they require survival of '
@@ -623,8 +691,13 @@ def main() -> int:
     print(f"  (recipe, seed) pairs available: {available}")
     print(f"  total dev examples: {len(table)}")
     print(f"  consensus natural failures: {len(consensus)}")
-    if 'kldrop' in recipes and 'kl' in recipes:
-        print(f"  kldrop beats kl: {len(a_wins)} | kl beats kldrop: {len(b_wins)}")
+    for pr in pair_results:
+        m_a = pr['ci_a_label0'][0]
+        m_b = pr['ci_b_label1'][0]
+        print(f"  {pr['a']} beats {pr['b']}: {len(pr['a_wins'])} "
+              f"(label=0 share {m_a * 100:.0f}%) | "
+              f"{pr['b']} beats {pr['a']}: {len(pr['b_wins'])} "
+              f"(label=1 share {m_b * 100:.0f}%)")
     for r in recipes:
         print(f"  B5 ({r}): {len(composite_only_by_recipe[r])}")
     return 0

@@ -127,9 +127,230 @@ Examples whose *majority* bucket across seeds is B2 or B3 for **every** of `stag
 
 (+1389 more in the consensus-failure set; full list available in the JSON dump below.)
 
-## 3. Where `kldrop` beats `kl` (n=85)
+## 3. Where `kldrop-p015` beats `kl` (n=131)
 
-Examples where `kldrop`'s majority bucket is B1_robust and `kl` is naturally failing (B2 or B3) — kldrop-specific fixes.
+Examples where `kldrop-p015`'s majority bucket is naturally-robust (B1 or B4) and `kl`'s is naturally-failing (B2/B3/B5).
+label=0 share: **97 %** (95 % CI: 94–99 %, n=131)
+
+#### id=01368  (label=1)
+- Caption: `then he said i couldn't come to the barbecue because i always burn the franks`
+- `kldrop-p015` clean prob `0.590` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.619` (τ=0.47), bucket `B5_composite_only_failure`
+- `kl` worst text attack: `punctuation@low` → prob `0.485`
+
+#### id=01397  (label=0)
+- Caption: `makeup artist $4,000 / month personal stylist $15,000 / week i can't tell the difference`
+- `kldrop-p015` clean prob `0.311` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.392` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `leetspeak@high` → prob `0.514`
+
+#### id=02619  (label=0)
+- Caption: `raise your hand if you're trash`
+- `kldrop-p015` clean prob `0.141` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.203` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `char_swap@medium` → prob `0.444`
+
+#### id=04165  (label=0)
+- Caption: `*had* a solution but nooooo.`
+- `kldrop-p015` clean prob `0.145` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.247` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `char_deletion@high` → prob `0.460`
+
+#### id=06245  (label=0)
+- Caption: `a woman cuddling a bear`
+- `kldrop-p015` clean prob `0.050` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.090` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `char_swap@high` → prob `0.431`
+
+#### id=06958  (label=0)
+- Caption: `my ex looks so peaceful when he sleeps`
+- `kldrop-p015` clean prob `0.111` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.176` (τ=0.47), bucket `B5_composite_only_failure`
+- `kl` worst text attack: `censoring@high` → prob `0.439`
+
+#### id=07168  (label=0)
+- Caption: `how liberals treat minorities who don't vote democrat`
+- `kldrop-p015` clean prob `0.232` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.361` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `leetspeak@high` → prob `0.520`
+
+#### id=09317  (label=0)
+- Caption: `two gorillas wrestling during quarantine`
+- `kldrop-p015` clean prob `0.037` (τ=0.52), bucket `B4_pgd_only`
+- `kl` clean prob `0.201` (τ=0.47), bucket `B3_natural_attack_flipped`
+- `kl` worst text attack: `punctuation@high` → prob `0.603`
+
+(+123 more.)
+
+## 4. Where `kl` beats `kldrop-p015` (n=77)
+
+Reverse direction — `kl`-specific fixes.
+label=1 share: **75 %** (95 % CI: 65–84 %, n=77)
+
+#### id=02564  (label=1)
+- Caption: `hi monkey`
+- `kldrop-p015` clean prob `0.527` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.714` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `char_swap@low` → prob `0.546`
+
+#### id=03179  (label=0)
+- Caption: `i'm this pretty because both my parents are dentists`
+- `kldrop-p015` clean prob `0.147` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.167` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `leetspeak@high` → prob `0.441`
+
+#### id=03692  (label=1)
+- Caption: `if it fits it ships`
+- `kldrop-p015` clean prob `0.460` (τ=0.52), bucket `B2_clean_wrong`
+- `kl` clean prob `0.637` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `censoring@low` → prob `0.562`
+
+#### id=04763  (label=1)
+- Caption: `when you're still fucked from last night's bender and sunglasses aren't gonna cut it`
+- `kldrop-p015` clean prob `0.587` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.482` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `char_swap@medium` → prob `0.415`
+
+#### id=05748  (label=0)
+- Caption: `how roaches be chillin under y'all refrigerators`
+- `kldrop-p015` clean prob `0.206` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.223` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `censoring@medium` → prob `0.297`
+
+#### id=05962  (label=1)
+- Caption: `best thing about her blowjob?... you know shes gonna swallow!!!`
+- `kldrop-p015` clean prob `0.665` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.612` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `char_deletion@high` → prob `0.493`
+
+#### id=09174  (label=1)
+- Caption: `1939- 1945 bake off winner`
+- `kldrop-p015` clean prob `0.451` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kl` clean prob `0.733` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `spacing@medium` → prob `0.572`
+
+#### id=10965  (label=1)
+- Caption: `went to wal-mart for windshield wipers picked up a sandwich maker!`
+- `kldrop-p015` clean prob `0.854` (τ=0.52), bucket `B5_composite_only_failure`
+- `kl` clean prob `0.831` (τ=0.47), bucket `B4_pgd_only`
+- `kl` worst text attack: `spacing@high` → prob `0.618`
+
+(+69 more.)
+
+## 5. Where `kldrop-p015` beats `kldrop` (n=135)
+
+Examples where `kldrop-p015`'s majority bucket is naturally-robust (B1 or B4) and `kldrop`'s is naturally-failing (B2/B3/B5).
+label=0 share: **90 %** (95 % CI: 84–94 %, n=135)
+
+#### id=01368  (label=1)
+- Caption: `then he said i couldn't come to the barbecue because i always burn the franks`
+- `kldrop-p015` clean prob `0.590` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.666` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `punctuation@low` → prob `0.510`
+
+#### id=01397  (label=0)
+- Caption: `makeup artist $4,000 / month personal stylist $15,000 / week i can't tell the difference`
+- `kldrop-p015` clean prob `0.311` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.422` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `char_swap@medium` → prob `0.556`
+
+#### id=03761  (label=0)
+- Caption: `we talked about it i agreed dinner would be ready on time in the future`
+- `kldrop-p015` clean prob `0.010` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.013` (τ=0.48), bucket `B5_composite_only_failure`
+- `kldrop` worst text attack: `punctuation@high` → prob `0.140`
+
+#### id=04165  (label=0)
+- Caption: `*had* a solution but nooooo.`
+- `kldrop-p015` clean prob `0.145` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.203` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `char_deletion@high` → prob `0.320`
+
+#### id=04632  (label=1)
+- Caption: `i could have annihilated all of them but i left some of them alive so you will know why i…`
+- `kldrop-p015` clean prob `0.537` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.689` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `spacing@medium` → prob `0.355`
+
+#### id=05142  (label=0)
+- Caption: `sea monkeys`
+- `kldrop-p015` clean prob `0.061` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.076` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `char_deletion@high` → prob `0.264`
+
+#### id=06958  (label=0)
+- Caption: `my ex looks so peaceful when he sleeps`
+- `kldrop-p015` clean prob `0.111` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.167` (τ=0.48), bucket `B3_natural_attack_flipped`
+- `kldrop` worst text attack: `censoring@high` → prob `0.440`
+
+#### id=07168  (label=0)
+- Caption: `how liberals treat minorities who don't vote democrat`
+- `kldrop-p015` clean prob `0.232` (τ=0.52), bucket `B4_pgd_only`
+- `kldrop` clean prob `0.306` (τ=0.48), bucket `B5_composite_only_failure`
+- `kldrop` worst text attack: `leetspeak@high` → prob `0.473`
+
+(+127 more.)
+
+## 6. Where `kldrop` beats `kldrop-p015` (n=59)
+
+Reverse direction — `kldrop`-specific fixes.
+label=1 share: **76 %** (95 % CI: 64–86 %, n=59)
+
+#### id=03876  (label=0)
+- Caption: `my dog loves the attention`
+- `kldrop-p015` clean prob `0.108` (τ=0.52), bucket `B5_composite_only_failure`
+- `kldrop` clean prob `0.085` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `char_swap@high` → prob `0.245`
+
+#### id=04763  (label=1)
+- Caption: `when you're still fucked from last night's bender and sunglasses aren't gonna cut it`
+- `kldrop-p015` clean prob `0.587` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.633` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `spacing@high` → prob `0.531`
+
+#### id=04897  (label=1)
+- Caption: `i was asked who my favourite x-men character was apparently my answer was inappropriate`
+- `kldrop-p015` clean prob `0.936` (τ=0.52), bucket `B5_composite_only_failure`
+- `kldrop` clean prob `0.929` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `keyboard_typo@high` → prob `0.675`
+
+#### id=10965  (label=1)
+- Caption: `went to wal-mart for windshield wipers picked up a sandwich maker!`
+- `kldrop-p015` clean prob `0.854` (τ=0.52), bucket `B5_composite_only_failure`
+- `kldrop` clean prob `0.856` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `spacing@high` → prob `0.582`
+
+#### id=12638  (label=1)
+- Caption: `tortured... by my own fellow men... focus, jesus! snap out of it. no! it's payback time`
+- `kldrop-p015` clean prob `0.634` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.605` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `censoring@medium` → prob `0.339`
+
+#### id=13978  (label=0)
+- Caption: `be careful who you call ugly in high school`
+- `kldrop-p015` clean prob `0.032` (τ=0.52), bucket `B5_composite_only_failure`
+- `kldrop` clean prob `0.056` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `spacing@high` → prob `0.186`
+
+#### id=18509  (label=0)
+- Caption: `miss 2016 miss 2018 miss 2017`
+- `kldrop-p015` clean prob `0.089` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.064` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `leetspeak@high` → prob `0.416`
+
+#### id=19382  (label=1)
+- Caption: `"if a dishwasher wore pants, would it wear them like this or like this"`
+- `kldrop-p015` clean prob `0.810` (τ=0.52), bucket `B3_natural_attack_flipped`
+- `kldrop` clean prob `0.758` (τ=0.48), bucket `B4_pgd_only`
+- `kldrop` worst text attack: `censoring@low` → prob `0.426`
+
+(+51 more.)
+
+## 7. Where `kldrop` beats `kl` (n=85)
+
+Examples where `kldrop`'s majority bucket is naturally-robust (B1 or B4) and `kl`'s is naturally-failing (B2/B3/B5).
+label=0 share: **74 %** (95 % CI: 65–82 %, n=85)
 
 #### id=02619  (label=0)
 - Caption: `raise your hand if you're trash`
@@ -181,9 +402,10 @@ Examples where `kldrop`'s majority bucket is B1_robust and `kl` is naturally fai
 
 (+77 more.)
 
-## 4. Where `kl` beats `kldrop` (n=107)
+## 8. Where `kl` beats `kldrop` (n=107)
 
-Reverse direction — `kl`-specific fixes. Tradeoff cases where `kldrop`'s clean-accuracy cost manifests at the per-example level.
+Reverse direction — `kl`-specific fixes.
+label=1 share: **42 %** (95 % CI: 33–51 %, n=107)
 
 #### id=02564  (label=1)
 - Caption: `hi monkey`
@@ -235,7 +457,7 @@ Reverse direction — `kl`-specific fixes. Tradeoff cases where `kldrop`'s clean
 
 (+99 more.)
 
-## 5. Composite-only failures (B5) — examples robust to single-cell, broken by composites
+## 9. Composite-only failures (B5) — examples robust to single-cell, broken by composites
 
 Per recipe count (majority across seeds):
 
@@ -503,7 +725,7 @@ Representative B5 examples for each recipe (up to 5):
   - `composite_2image` mean attacked prob `0.835`
   - `composite_text_image` mean attacked prob `0.861`
 
-## 6. Limitations of this analysis
+## 10. Limitations of this analysis
 
 - Single eval split (`test_unseen`); recipe-seed counts are point estimates per seed averaged across 3 seeds — small samples.
 - `B5_composite_only_failure` and `B4_pgd_only` are *strict* — they require survival of every single-cell natural attack first. An example flipped by both a single-cell and a composite goes into B3, not B5.

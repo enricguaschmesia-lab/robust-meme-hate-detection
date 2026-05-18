@@ -213,6 +213,29 @@ PYTHONPATH=src .venv/bin/python3 scripts/aggregate_phase4.py
 PYTHONPATH=src .venv/bin/python3 scripts/make_poster_figures.py
 ```
 
+**Important caveats** (also documented in the per-phase limitations sections):
+
+- **PGD ε ≥ 2/255 is fully undefended** on every recipe across all three
+  splits (AUROC ≈ 0). Naturalistic-only is the project's threat-model
+  scope; adversarial training is owned separately.
+- **Class-asymmetric finding refreshed for `kldrop-p015`.** Phase 6's
+  original dev finding (kldrop saves label=0, kl saves label=1) was on
+  the now-Pareto-dominated p=0.30 recipe with small disagreement
+  samples. On the recommended `kldrop-p015`, the label=0 bias on its
+  wins side is **stronger** on test_unseen (97 % at n=131, 95 % CI
+  94–99 %) than the original kldrop-vs-kl finding (74 % at n=85).
+  Phase 8 § 4 has the full reproduction; figure 4 in the poster uses
+  the refreshed pair.
+- **Dropout sweep tested at p ∈ {0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.50}**;
+  `kldrop-p015` wins the headline metrics. Out of that sweep range,
+  global optimality is not claimed.
+- **Augmentation has a ceiling around 70 % consensus failures** on
+  test (66 % on dev, 72 % on test_seen, 73 % on test_unseen). Even
+  the best recipe leaves the majority of examples vulnerable to
+  *some* perturbation in the 73-cell grid; pushing further would
+  likely require a stronger text encoder or representation-level
+  robustness loss rather than more augmentation.
+
 ## Architecture (one-paragraph)
 
 OpenCLIP ViT-B/32 (`laion2b_s34b_b79k`) image and text encoders, frozen by
