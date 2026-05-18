@@ -56,6 +56,60 @@ Answers DoD bullets 5 ("worst-case across families") and 6 ("which modality is m
 | image-photometric | brightness_up (high) | 0.7418 | +0.0124 | 0.0802 |
 | image-geometric | occlusion (high) | 0.7453 | +0.0090 | 0.0759 |
 
+## Worst cells — Unknown-only (`robust-kldrop-p015-seed0`)
+
+| Family | Worst cell | Attacked AUROC | ΔAUROC | ASR |
+|---|---|---:|---:|---:|
+| text | char_deletion (high) | 0.6559 | +0.0848 | 0.1810 |
+| image-pixel | blur (high) | 0.7156 | +0.0251 | 0.1577 |
+| image-photometric | brightness_up (high) | 0.7256 | +0.0150 | 0.0934 |
+| image-geometric | crop (high) | 0.7233 | +0.0173 | 0.1664 |
+
+## Worst cells — Unknown-only (`robust-kldrop-p015-seed1`)
+
+| Family | Worst cell | Attacked AUROC | ΔAUROC | ASR |
+|---|---|---:|---:|---:|
+| text | leetspeak (high) | 0.6628 | +0.0963 | 0.2664 |
+| image-pixel | blur (high) | 0.7296 | +0.0295 | 0.2507 |
+| image-photometric | brightness_up (high) | 0.7473 | +0.0119 | 0.0940 |
+| image-geometric | crop (high) | 0.7416 | +0.0175 | 0.1724 |
+
+## Worst cells — Unknown-only (`robust-kldrop-p015-seed2`)
+
+| Family | Worst cell | Attacked AUROC | ΔAUROC | ASR |
+|---|---|---:|---:|---:|
+| text | censoring (high) | 0.6650 | +0.0788 | 0.2153 |
+| image-pixel | blur (high) | 0.7132 | +0.0305 | 0.2168 |
+| image-photometric | brightness_up (high) | 0.7334 | +0.0104 | 0.0853 |
+| image-geometric | crop (high) | 0.7317 | +0.0121 | 0.1691 |
+
+## Worst cells — Unknown-only (`robust-kldrop-p050-seed0`)
+
+| Family | Worst cell | Attacked AUROC | ΔAUROC | ASR |
+|---|---|---:|---:|---:|
+| text | leetspeak (high) | 0.6640 | +0.0765 | 0.2009 |
+| image-pixel | blur (high) | 0.7044 | +0.0361 | 0.2434 |
+| image-photometric | brightness_up (high) | 0.7233 | +0.0172 | 0.0953 |
+| image-geometric | crop (high) | 0.7281 | +0.0124 | 0.2038 |
+
+## Worst cells — Unknown-only (`robust-kldrop-p050-seed1`)
+
+| Family | Worst cell | Attacked AUROC | ΔAUROC | ASR |
+|---|---|---:|---:|---:|
+| text | leetspeak (high) | 0.6573 | +0.0844 | 0.2075 |
+| image-pixel | blur (high) | 0.7107 | +0.0309 | 0.2695 |
+| image-photometric | brightness_up (high) | 0.7279 | +0.0138 | 0.0980 |
+| image-geometric | crop (high) | 0.7258 | +0.0158 | 0.1960 |
+
+## Worst cells — Unknown-only (`robust-kldrop-p050-seed2`)
+
+| Family | Worst cell | Attacked AUROC | ΔAUROC | ASR |
+|---|---|---:|---:|---:|
+| text | censoring (high) | 0.6275 | +0.0420 | 0.1519 |
+| image-pixel | compression (high) | 0.6527 | +0.0167 | 0.1456 |
+| image-photometric | brightness_up (high) | 0.6598 | +0.0096 | 0.0886 |
+| image-geometric | translation (medium) | 0.6582 | +0.0113 | 0.0918 |
+
 ## Worst cells — Unknown-only (`robust-kldrop-seed0`)
 
 | Family | Worst cell | Attacked AUROC | ΔAUROC | ASR |
@@ -134,6 +188,12 @@ input modality the attack family touches (e.g. text-only model under image attac
 | robust-kl-seed0 | +0.0609 | +0.0125 | +0.0066 | +0.0046 |
 | robust-kl-seed1 | +0.0623 | +0.0170 | +0.0093 | +0.0033 |
 | robust-kl-seed2 | +0.0610 | +0.0157 | +0.0088 | +0.0040 |
+| robust-kldrop-p015-seed0 | +0.0610 | +0.0175 | +0.0074 | +0.0092 |
+| robust-kldrop-p015-seed1 | +0.0658 | +0.0198 | +0.0076 | +0.0095 |
+| robust-kldrop-p015-seed2 | +0.0565 | +0.0203 | +0.0076 | +0.0063 |
+| robust-kldrop-p050-seed0 | +0.0537 | +0.0252 | +0.0097 | +0.0084 |
+| robust-kldrop-p050-seed1 | +0.0578 | +0.0202 | +0.0074 | +0.0097 |
+| robust-kldrop-p050-seed2 | +0.0214 | +0.0102 | +0.0046 | +0.0002 |
 | robust-kldrop-seed0 | +0.0560 | +0.0192 | +0.0071 | +0.0102 |
 | robust-kldrop-seed1 | +0.0623 | +0.0199 | +0.0081 | +0.0076 |
 | robust-kldrop-seed2 | +0.0307 | +0.0087 | +0.0038 | +0.0001 |
@@ -152,6 +212,12 @@ input modality the attack family touches (e.g. text-only model under image attac
 | robust-kl-seed0 | 0.7345 | 0.0000 | 0.7345 | 0.9971 |
 | robust-kl-seed1 | 0.7438 | 0.0000 | 0.7438 | 0.9899 |
 | robust-kl-seed2 | 0.7592 | 0.0000 | 0.7592 | 1.0000 |
+| robust-kldrop-p015-seed0 | 0.7327 | 0.0000 | 0.7327 | 0.9970 |
+| robust-kldrop-p015-seed1 | 0.7565 | 0.0000 | 0.7565 | 1.0000 |
+| robust-kldrop-p015-seed2 | 0.7454 | 0.0000 | 0.7454 | 1.0000 |
+| robust-kldrop-p050-seed0 | 0.7333 | 0.0000 | 0.7333 | 0.9985 |
+| robust-kldrop-p050-seed1 | 0.7319 | 0.0000 | 0.7319 | 1.0000 |
+| robust-kldrop-p050-seed2 | 0.6644 | 0.0000 | 0.6644 | 0.9968 |
 | robust-kldrop-seed0 | 0.7270 | 0.0000 | 0.7270 | 0.9940 |
 | robust-kldrop-seed1 | 0.7455 | 0.0000 | 0.7455 | 1.0000 |
 | robust-kldrop-seed2 | 0.6759 | 0.0000 | 0.6759 | 0.9984 |

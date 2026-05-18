@@ -115,8 +115,14 @@ def _is_robust_key(key: str) -> tuple[bool, str | None]:
     """Identify a robust-trained run; return (is_robust, variant).
 
     Recipes: 'augonly', 'kl' (KL_full + KL_image_branch),
-    'kldrop' (KL variant + per-example text-modality dropout),
-    'kllowmed' (Phase 5c: kl with severity restricted to low+medium)."""
+    'kldrop' (KL variant + per-example text-modality dropout p=0.30),
+    'kllowmed' (Phase 5c: kl with severity restricted to low+medium),
+    'kldrop-p015' / 'kldrop-p050' (Phase 9b dropout-rate sweep — p=0.15
+    and p=0.50 alongside the default p=0.30 in `kldrop`)."""
+    if key.startswith('robust-kldrop-p015-seed') or key.startswith('train-robust-kldrop-p015-seed'):
+        return True, 'kldrop-p015'
+    if key.startswith('robust-kldrop-p050-seed') or key.startswith('train-robust-kldrop-p050-seed'):
+        return True, 'kldrop-p050'
     if key.startswith('robust-kllowmed-seed') or key.startswith('train-robust-kllowmed-seed'):
         return True, 'kllowmed'
     if key.startswith('robust-kldrop-seed') or key.startswith('train-robust-kldrop-seed'):
@@ -615,7 +621,7 @@ def _make_figures(perturbed: dict[str, dict[str, Any]], whitebox: dict[str, dict
 # Phase 5: robust-vs-clean comparison
 # ----------------------------------------------------------------------------
 
-VARIANT_ORDER = ('clean', 'augonly', 'kl', 'kldrop', 'kllowmed')
+VARIANT_ORDER = ('clean', 'augonly', 'kl', 'kldrop', 'kldrop-p015', 'kldrop-p050', 'kllowmed')
 
 
 def _group_by_variant(payloads: dict[str, dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -903,7 +909,11 @@ def _make_robust_figures(
     wb_groups = _group_by_variant(whitebox)
     if any(wb_groups.get(v) for v in ('clean', 'augonly', 'kl')):
         fig, ax = plt.subplots(figsize=(6.4, 4.2))
-        styles = {'clean': '-', 'augonly': '--', 'kl': '-.', 'kldrop': ':', 'kllowmed': (0, (3, 1, 1, 1))}
+        styles = {
+            'clean': '-', 'augonly': '--', 'kl': '-.', 'kldrop': ':',
+            'kldrop-p015': (0, (1, 1)), 'kldrop-p050': (0, (5, 2)),
+            'kllowmed': (0, (3, 1, 1, 1)),
+        }
         for variant in VARIANT_ORDER:
             seeds = wb_groups.get(variant, [])
             if not seeds:
@@ -1158,11 +1168,24 @@ def _write_composite_table(perturbed: dict[str, dict[str, Any]], split: str = 'd
     lines.append('| `composite_2text_2image` | 2 | 2 |')
     lines.append('')
 
+    # Detect whether any composite cells use severity='mixed' (Phase 9a);
+    # if so, surface it as an extra column so the realistic-user threat
+    # appears alongside the fixed-severity columns.
+    has_mixed = any(
+        c.get('attack', '').startswith('composite_') and c.get('severity_level') == 'mixed'
+        for p in perturbed.values()
+        for c in p.get('cells', [])
+    )
+
     for ctype in composite_types:
         lines.append(f"### {ctype}")
         lines.append('')
-        lines.append('| Recipe | low ΔAUROC | medium ΔAUROC | high ΔAUROC | high ASR |')
-        lines.append('|---|---:|---:|---:|---:|')
+        if has_mixed:
+            lines.append('| Recipe | low ΔAUROC | medium ΔAUROC | high ΔAUROC | **mixed** ΔAUROC | high ASR | mixed ASR |')
+            lines.append('|---|---:|---:|---:|---:|---:|---:|')
+        else:
+            lines.append('| Recipe | low ΔAUROC | medium ΔAUROC | high ΔAUROC | high ASR |')
+            lines.append('|---|---:|---:|---:|---:|')
         for variant in VARIANT_ORDER:
             seeds = pert_groups.get(variant, [])
             if not seeds:
@@ -1171,11 +1194,21 @@ def _write_composite_table(perturbed: dict[str, dict[str, Any]], split: str = 'd
             md = _cell_stat(seeds, ctype, 'medium', 'gap')
             hi = _cell_stat(seeds, ctype, 'high', 'gap')
             asr = _cell_stat(seeds, ctype, 'high', 'asr')
-            if all(math.isnan(x[0]) for x in (lo, md, hi)):
-                continue
-            lines.append(
-                f"| {variant} | {_fmt(*lo)} | **{_fmt(*md)}** | {_fmt(*hi)} | {_fmt(*asr)} |"
-            )
+            if has_mixed:
+                mx = _cell_stat(seeds, ctype, 'mixed', 'gap')
+                mxasr = _cell_stat(seeds, ctype, 'mixed', 'asr')
+                if all(math.isnan(x[0]) for x in (lo, md, hi, mx)):
+                    continue
+                lines.append(
+                    f"| {variant} | {_fmt(*lo)} | {_fmt(*md)} | {_fmt(*hi)} "
+                    f"| **{_fmt(*mx)}** | {_fmt(*asr)} | {_fmt(*mxasr)} |"
+                )
+            else:
+                if all(math.isnan(x[0]) for x in (lo, md, hi)):
+                    continue
+                lines.append(
+                    f"| {variant} | {_fmt(*lo)} | **{_fmt(*md)}** | {_fmt(*hi)} | {_fmt(*asr)} |"
+                )
         lines.append('')
 
     with out.open('a', encoding='utf-8') as fh:

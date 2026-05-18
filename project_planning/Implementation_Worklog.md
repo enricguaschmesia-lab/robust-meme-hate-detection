@@ -1,4 +1,4 @@
-# Implementation Worklog — Phases 1–17
+# Implementation Worklog — Phases 1–19
 
 This log records every step taken from the green-light decision (2026-05-02) through to the Definition of Done in `model_architecture.md` §12. It is appended to as work progresses; existing entries are not edited except to append outcomes.
 
@@ -316,3 +316,57 @@ All Phase 5/5c numbers so far were dev-only. Phase 7 reproduces the headline tab
 
 Full write-up in `project_planning/Phase7_Completion_Report.md`. Per-split data tables: `phase4/{robust_vs_clean,perturbed_table,whitebox_table,worst_case}.test_seen.md` and `.test_unseen.md`. Per-split figures: `phase4/figures/*.test_seen.png` and `.test_unseen.png`.
 
+
+## Phase 18 — Test-side failure analysis (Phase 8, 2026-05-18)
+
+Closed the Phase 7 § 8 limitation "no test-set per-example failure analysis written." Extended `scripts/failure_analysis.py::_job_dir` to resolve test-side cluster-results dirs based on the `--split` flag (previous bug: it only changed the caption file, not the results lookup). Ran `failure_analysis.py --split test_seen` and `--split test_unseen` and wrote `project_planning/Phase8_TestFailure_Report.md`.
+
+**Phase 18 outcomes:**
+
+- *Class-asymmetric trade-off — partial reproduction*. Phase 6 dev: kldrop-wins 97 % label=0, kl-wins 94 % label=1 on n=83 disagreements. Test_seen (n=97): 66 % / 66 %. Test_unseen (n=195): 71 % / **43 %**. The kldrop side reproduces in direction on every split with smaller effect size; the kl side reproduces weakly on test_seen and **breaks on test_unseen** — kl actually saves more non-hate than hate on the naturalistic-prior split. The 97 % / 94 % dev figures look like small-sample noise inflated above the true population effect.
+- *Consensus residual failures*: dev 331/500 (66 %) → test_seen 722/1000 (72 %) → test_unseen 1456/2000 (73 %). Augmentation gains have a ceiling near the 70 % consensus-failure rate on this evaluation surface.
+- *Bucket counts reproduce*: `kl` wins naturalistic-fully-robust % on dev + test_seen; `kllowmed` wins on test_unseen (confirms Phase 7's partial-refutation finding).
+- *Defensible held-out story*: "kldrop systematically reduces text-attack-induced false-positive flips on non-hate examples (image-branch revival mechanism)." The kl-side class story does not generalise.
+
+## Phase 19 — Mixed-severity composites + modality-dropout-rate sweep (Phase 9, 2026-05-18)
+
+Two follow-ups bundled into one phase since they share a commit and overlap in cluster time.
+
+### Phase 9a — Mixed-severity composite cells
+
+Surgical extension to `eval/run_perturbed.py::_apply_composite`: `severity='mixed'` triggers per-component severity sampling from {low, medium, high}. The main loop always emits a `mixed` cell alongside the standard low/medium/high cells; perturbed-eval JSONs grow from 69 → 73 cells. Aggregator's `_write_composite_table` auto-detects mixed cells and surfaces a separate column.
+
+Cluster: **45 perturbed re-runs** (5 recipes × 3 seeds × 3 splits). All Succeeded. Whitebox + modality-ablation results unchanged.
+
+**Phase 9a outcomes**:
+
+- Mixed-severity ΔAUROC lands between medium and high — closer to medium — on every (recipe, composite type, split) cell. **The realistic adversarial-user threat (mixed-severity composite) is comparable to a medium-severity single-cell composite**, not to a high-severity stress test. Validates the project's choice of "medium" as the realistic-threat headline.
+- No new Pareto rank inversions; mixed-severity ordering tracks the medium-severity ordering already established.
+
+### Phase 9b — Modality-dropout-rate sweep
+
+Two new configs `stage1_robust_kl_drop_{p015,p050}.yaml` alongside the existing `kl_drop.yaml` (p=0.30). Aggregator's `_is_robust_key` + `VARIANT_ORDER` and `failure_analysis.py::_job_dir` extended to recognise the new recipe keys.
+
+Cluster: **6 training jobs + 54 eval jobs = 60 total**. All Succeeded under GPU contention (training ~30 min each vs nominal ~12 min).
+
+**Phase 9b outcomes (significant)**:
+
+- **The untuned `modality_dropout_text = 0.30` in `kldrop` was *not* Pareto-optimal.** `kldrop-p015` strictly dominates `kldrop` on every split: higher clean AUROC (+0.030 dev, +0.027 test_seen, +0.030 test_unseen) AND image-only AUROC within seed noise (0.638 vs 0.636 dev, 0.638 vs 0.641 test_seen, 0.658 vs 0.655 test_unseen).
+- **The first 15 % of modality dropout is "free"** on clean accuracy: image-branch revival saturates by p≈0.15 (image-only AUROC jumps 0.611 → 0.638 dev) before the clean-accuracy cost kicks in.
+- **p=0.50 wins on composite robustness**: `kldrop-p050` has the smallest composite_2text medium ΔAUROC on every split (0.036 test_unseen vs `kldrop`'s 0.049, -27 % relative; vs clean's 0.073, -51 %). Cost: ~3 pp clean AUROC, similar to `kldrop`.
+- **New recommended default**: `kldrop-p015` for the project's primary threat model; `kldrop-p050` as the conservative-paranoid alternative; original `kldrop` (p=0.30) now Pareto-dominated.
+
+Full sweep tables: `project_planning/phase4/robust_vs_clean*.md` (per-recipe rows added). Detailed write-up: `project_planning/Phase9b_DropoutSweep_Report.md`.
+
+### Poster figures
+
+New script `scripts/make_poster_figures.py` produces 6 publication-styled figures (PNG + PDF + caption.txt each) into `project_planning/poster_figures/`:
+
+1. `01_headline_pareto` — Pareto scatter (Clean AUROC vs Worst-cell text Δ), 3 panels per split.
+2. `02_image_branch_revival` — multimodal + image-only AUROC per recipe with dedicated-baseline reference line.
+3. `03_composite_escalation` — heatmap of composite ΔAUROC × recipe × type × severity (test_unseen).
+4. `04_class_asymmetric_tradeoff` — Phase 6/8 disagreement bars by label.
+5. `05_severity_curves` — text-family mean ΔAUROC vs severity per recipe, per split.
+6. `06_dropout_sweep` — image-only and clean AUROC vs p with the dedicated baseline.
+
+Reuses `scripts/aggregate_phase4.py` + `scripts/failure_analysis.py` loaders so figures stay in sync with the per-phase tables.
