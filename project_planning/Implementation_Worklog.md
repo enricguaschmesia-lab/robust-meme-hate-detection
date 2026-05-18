@@ -1,4 +1,4 @@
-# Implementation Worklog — Phases 1–19
+# Implementation Worklog — Phases 1–20
 
 This log records every step taken from the green-light decision (2026-05-02) through to the Definition of Done in `model_architecture.md` §12. It is appended to as work progresses; existing entries are not edited except to append outcomes.
 
@@ -370,3 +370,53 @@ New script `scripts/make_poster_figures.py` produces 6 publication-styled figure
 6. `06_dropout_sweep` — image-only and clean AUROC vs p with the dedicated baseline.
 
 Reuses `scripts/aggregate_phase4.py` + `scripts/failure_analysis.py` loaders so figures stay in sync with the per-phase tables.
+
+## Phase 20 — Narrative refresh (Phase 10, 2026-05-19)
+
+Closes the six items surfaced by the post-Phase-9 critical review. Single phase covering the local code/analysis refresh plus the cluster-side finer dropout sweep that landed afterwards.
+
+### 20.1 Code changes (Commit G — `07b4371`)
+
+- `scripts/failure_analysis.py`:
+  - New `--pairs` CLI flag (default: `kldrop-p015:kl,kldrop-p015:kldrop,kldrop:kl`). The hardcoded kldrop-vs-kl disagreement section is now a loop over arbitrary recipe pairs.
+  - New `_bootstrap_ci` helper (percentile bootstrap, n_boot=2000, rng_seed=0). Every disagreement label-share now reports `X % (95 % CI: low-high, n=N)`.
+- `scripts/aggregate_phase4.py`:
+  - `MAIN_VARIANT_ORDER` constant (excludes `kldrop` p=0.30). All headline tables and figures iterate this; the full `VARIANT_ORDER` is referenced only by the new appendix table.
+  - `_write_appendix_dominated_table` per split — surfaces dominated recipes (`kldrop` p=0.30 today) in a small appendix for reviewer audit.
+  - `_classification_at_threshold` + `_write_devtau_test_table` — per (recipe, seed), recomputes test-split clean F1/accuracy at the dev-tuned τ. Surfaced as a "Deployment-honest threshold" section in `robust_vs_clean.test_*.md`. AUROC unaffected; F1/acc drop ~1-3 pp on test (the size of the mild data-leak inflation).
+- `scripts/make_poster_figures.py`:
+  - Figures 01, 02, 03, 05 use `MAIN_VARIANT_ORDER` (drops `kldrop` p=0.30 from the visual story).
+  - Figure 04 (class-asymmetric) switched from `kldrop` vs `kl` to `kldrop-p015` vs `kl`.
+
+### 20.2 Phase 10 findings on the refreshed pairs
+
+Phase 6's dev-only class-asymmetric claim (small samples n=34, n=49) re-examined for the new recommended ckpt `kldrop-p015` with bootstrap CIs:
+
+| Pair | Split | Disagreement n | label=0 share (95 % CI) | label=1 share (95 % CI) |
+|---|---|---:|---|---|
+| `kldrop-p015:kl` | dev | 21 / 22 | 43 % (24–62 %) | 68 % (50–86 %) |
+| `kldrop-p015:kl` | test_seen | 46 / 32 | 41 % (28–55 %) | 34 % (19–50 %) |
+| `kldrop-p015:kl` | **test_unseen** | **131** / 77 | **97 %** (94–99 %) | 75 % (65–84 %) |
+| `kldrop-p015:kldrop` | test_unseen | 135 / 59 | 90 % (84–94 %) | 76 % (64–86 %) |
+
+The kldrop-side label=0 bias **strengthens** for the new recommended `kldrop-p015` on test_unseen (97 % at n=131, CI 94–99 %, no overlap with the 50 % null) — beating the original `kldrop`'s 74 % at n=85. The kl-side label=1 bias remains weak; it was the bidirectional formulation in Phase 6 that overstated the case. Updated defensible held-out claim: "On test_unseen, `kldrop-p015`'s per-example wins against `kl` are 97 % label=0 (95 % CI 94–99 %), confirming image-branch-revival prevents text-attack false-positive flips."
+
+### 20.3 Finer dropout sweep (Commit H — `9af9b90`)
+
+New configs `stage1_robust_kl_drop_{p010,p020,p025}.yaml` train 3 new modality_dropout_text rates. 9 train + 81 eval = 90 cluster jobs (under significant GPU contention; multiple SSH-dropout-driven resubmissions of the eval batch).
+
+7-point sweep verdict (Phase 9b § 5):
+
+- **`kldrop-p015` and `kldrop-p025` are jointly Pareto-optimal**. Clean AUROC within seed noise on every split; `kldrop-p025` marginally better image-only (+0.010 on test_unseen) and composite robustness.
+- "First 15 %" rule from original Phase 9b extends to "first 25 %" — the clean-AUROC penalty stays within seed noise through p ≤ 0.25, then kicks in by p = 0.30.
+- `kldrop-p010` is anomalously volatile (one underperforming seed); not recommended.
+- `kldrop` (p=0.30) and `kldrop-p050` (p=0.50) remain confirmed dominated / conservative-paranoid alternative.
+- `kldrop-p015` retained as the single documented recommendation for narrative continuity; `kldrop-p025` is a defensible alternative in the same Pareto neighbourhood.
+
+### 20.4 Documentation updates
+
+- `README.md`: added "Important caveats" block (PGD undefended; class-asymmetric refresh; sweep range; 70 % consensus-failure ceiling).
+- `Phase8_TestFailure_Report.md` § 8: refresh on `kldrop-p015` with bootstrap CIs and the multi-pair analysis.
+- `Phase9b_DropoutSweep_Report.md` § 5: 7-point sweep verification, refined Pareto reading, Phase 10 closures of § 6 limitations.
+- `Phase7_Completion_Report.md` § 6: updated Pareto recommendation already includes the Phase 9b/10 framing.
+- `Handoff_2026-05-19-final.md` (new): supersedes 2026-05-18-final with the refreshed state.
