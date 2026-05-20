@@ -59,6 +59,8 @@ class CLIPFusionConfig:
     arch: str = "ViT-B-32"
     pretrained: str | None = "laion2b_s34b_b79k"
     freeze_encoders: bool = True
+    freeze_image_encoder: bool | None = None
+    freeze_text_encoder: bool | None = None
     head_hidden: int = 512
     head_dropout: float = 0.2
 
@@ -76,6 +78,8 @@ class CLIPHateMemeClassifier(nn.Module):
         arch: str = "ViT-B-32",
         pretrained: str | None = "laion2b_s34b_b79k",
         freeze_encoders: bool = True,
+        freeze_image_encoder: bool | None = None,
+        freeze_text_encoder: bool | None = None,
         head_hidden: int = 512,
         head_dropout: float = 0.2,
         *,
@@ -86,6 +90,8 @@ class CLIPHateMemeClassifier(nn.Module):
             arch=arch,
             pretrained=pretrained,
             freeze_encoders=freeze_encoders,
+            freeze_image_encoder=freeze_image_encoder,
+            freeze_text_encoder=freeze_text_encoder,
             head_hidden=head_hidden,
             head_dropout=head_dropout,
         )
@@ -112,8 +118,14 @@ class CLIPHateMemeClassifier(nn.Module):
         self.normalize = Normalize(CLIP_MEAN, CLIP_STD)
         self.head = FusionHead(dim=self.embed_dim, hidden=head_hidden, dropout=head_dropout)
 
-        if freeze_encoders:
-            self.freeze_encoders()
+        if freeze_image_encoder is None and freeze_text_encoder is None:
+            if freeze_encoders:
+                self.freeze_encoders()
+        else:
+            self.set_encoder_trainability(
+                image_trainable=not bool(freeze_image_encoder) if freeze_image_encoder is not None else True,
+                text_trainable=not bool(freeze_text_encoder) if freeze_text_encoder is not None else True,
+            )
 
     # ------------------------------------------------------------------ helpers
     def normalize_dummy(self, x: torch.Tensor) -> torch.Tensor:
@@ -123,6 +135,31 @@ class CLIPHateMemeClassifier(nn.Module):
     def freeze_encoders(self) -> None:
         for p in self.clip.parameters():
             p.requires_grad = False
+
+    def set_encoder_trainability(self, *, image_trainable: bool, text_trainable: bool) -> None:
+        self.freeze_encoders()
+        if image_trainable:
+            for p in self.clip.visual.parameters():
+                p.requires_grad = True
+        if text_trainable:
+            transformer = getattr(self.clip, "transformer", None)
+            if isinstance(transformer, nn.Module):
+                for p in transformer.parameters():
+                    p.requires_grad = True
+            for name in ("token_embedding", "ln_final"):
+                mod = getattr(self.clip, name, None)
+                if isinstance(mod, nn.Module):
+                    for p in mod.parameters():
+                        p.requires_grad = True
+            tp = getattr(self.clip, "text_projection", None)
+            if isinstance(tp, nn.Parameter):
+                tp.requires_grad = True
+            elif isinstance(tp, nn.Module):
+                for p in tp.parameters():
+                    p.requires_grad = True
+            pos = getattr(self.clip, "positional_embedding", None)
+            if isinstance(pos, nn.Parameter):
+                pos.requires_grad = True
 
     def unfreeze_last_blocks(self, n_blocks: int = 2) -> None:
         """Stage-2 default: unfreeze the last ``n_blocks`` of each encoder.

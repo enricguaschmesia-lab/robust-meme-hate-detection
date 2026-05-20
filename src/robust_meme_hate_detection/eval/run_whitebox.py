@@ -52,6 +52,91 @@ class _ImageOnlyAdapter:
         return self
 
 
+def _tensor_to_pil(image_tensor):
+    import torch
+    from PIL import Image
+
+    image = image_tensor.detach().cpu().clamp(0, 1)
+    image = (image * 255.0).round().to(torch.uint8)
+    if image.ndim != 3 or image.shape[0] != 3:
+        raise ValueError(f'Expected CHW RGB tensor, got shape {tuple(image.shape)}')
+    array = image.permute(1, 2, 0).contiguous().numpy()
+    return Image.fromarray(array, mode='RGB')
+
+
+def _collect_sample_records(
+    batch,
+    adv_images,
+    clean_probs_batch,
+    attacked_probs_batch,
+    *,
+    attack: str,
+    eps_num: int,
+    max_samples: int,
+):
+    samples: list[dict[str, Any]] = []
+    clean_images = batch['images']
+    ids = batch['ids']
+    labels = batch['labels'].tolist()
+    for idx, (eid, label, clean_prob, attacked_prob) in enumerate(
+        zip(ids, labels, clean_probs_batch, attacked_probs_batch)
+    ):
+        if len(samples) >= max_samples:
+            break
+        samples.append({
+            'id': eid,
+            'label': int(label),
+            'clean_prob': float(clean_prob),
+            'attacked_prob': float(attacked_prob),
+            'clean_image': clean_images[idx].detach().cpu(),
+            'adv_image': adv_images[idx].detach().cpu(),
+            'attack': attack,
+            'eps_num': eps_num,
+        })
+    return samples
+
+
+def _save_sample_records(sample_root, attack: str, eps_num: int, samples: list[dict[str, Any]]):
+    from PIL import Image, ImageDraw
+
+    cell_dir = sample_root / f'{attack}_eps{eps_num}'
+    cell_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest: list[dict[str, Any]] = []
+    for i, sample in enumerate(samples):
+        clean_path = cell_dir / f'{i:02d}_{sample["id"]}_clean.png'
+        adv_path = cell_dir / f'{i:02d}_{sample["id"]}_adv.png'
+        pair_path = cell_dir / f'{i:02d}_{sample["id"]}_pair.png'
+
+        clean_img = _tensor_to_pil(sample['clean_image'])
+        adv_img = _tensor_to_pil(sample['adv_image'])
+        clean_img.save(clean_path)
+        adv_img.save(adv_path)
+
+        canvas = Image.new('RGB', (clean_img.width * 2, clean_img.height + 24), 'white')
+        canvas.paste(clean_img, (0, 24))
+        canvas.paste(adv_img, (clean_img.width, 24))
+        draw = ImageDraw.Draw(canvas)
+        draw.text(
+            (8, 4),
+            f"{sample['id']} label={sample['label']} clean={sample['clean_prob']:.4f} adv={sample['attacked_prob']:.4f}",
+            fill='black',
+        )
+        canvas.save(pair_path)
+
+        manifest.append({
+            'id': sample['id'],
+            'label': sample['label'],
+            'clean_prob': sample['clean_prob'],
+            'attacked_prob': sample['attacked_prob'],
+            'clean_path': clean_path.name,
+            'adv_path': adv_path.name,
+            'pair_path': pair_path.name,
+        })
+
+    (cell_dir / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--ckpt', required=True)
@@ -75,6 +160,10 @@ def main() -> int:
         '--epsilons', default='1,2,4,8',
         help="Comma-separated numerators; each value e yields epsilon=e/255.",
     )
+    parser.add_argument(
+        '--max-epsilon', type=int, default=0,
+        help='Optional upper bound on epsilon numerators; 0 disables filtering.',
+    )
     parser.add_argument('--pgd-steps', type=int, default=10)
     parser.add_argument(
         '--pgd-alpha-frac', type=float, default=0.25,
@@ -82,6 +171,10 @@ def main() -> int:
     )
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument(
+        '--sample-limit', type=int, default=4,
+        help='Number of adversarial examples to save per attack/epsilon cell (0 disables).',
+    )
     parser.add_argument(
         '--max-batches', type=int, default=0,
         help="0 = attack the full split. >0 caps attack batches per cell (smoke).",
@@ -125,6 +218,10 @@ def main() -> int:
     epsilon_nums = [int(e.strip()) for e in args.epsilons.split(',') if e.strip()]
     if any(e <= 0 for e in epsilon_nums):
         raise ValueError("--epsilons numerators must be positive integers (over 255)")
+    if args.max_epsilon and args.max_epsilon > 0:
+        epsilon_nums = [e for e in epsilon_nums if e <= args.max_epsilon]
+        if not epsilon_nums:
+            raise ValueError("--max-epsilon filtered out all epsilon values")
 
     image_tfm = ClipImage01Transform(size=224)
     text_tfm = ClipTokenize(arch=model_cfg['arch'])
@@ -165,6 +262,9 @@ def main() -> int:
     # The attack functions call ``model(images, tokens)``; for an image-only
     # checkpoint, route through forward_image_only via the adapter.
     attack_callable = _ImageOnlyAdapter(model) if modality == 'image' else model
+
+    sample_root = out_dir / 'samples'
+    sample_root.mkdir(parents=True, exist_ok=True)
 
     # --------- collect [0,1] images, tokens, labels, ids in batches ---------
     # We pre-materialise the dev split into a list of batches so each
@@ -216,6 +316,7 @@ def main() -> int:
             attacked_probs: list[float] = []
             attacked_labels: list[int] = []
             attacked_ids: list[str] = []
+            sample_records: list[dict[str, Any]] = []
 
             for bi, b in enumerate(batches):
                 if args.max_batches and bi >= args.max_batches:
@@ -223,6 +324,17 @@ def main() -> int:
                 images = b['images'].to(device, non_blocking=True)
                 tokens = b['tokens'].to(device, non_blocking=True)
                 lab_t = b['labels'].to(device).float()
+
+                with torch.no_grad():
+                    with torch.autocast(
+                        device_type=device.type, dtype=torch.bfloat16,
+                        enabled=device.type == 'cuda',
+                    ):
+                        if modality == 'multimodal':
+                            clean_logit_batch = model(images, tokens)
+                        else:
+                            clean_logit_batch = model.forward_image_only(images)
+                clean_probs_batch = torch.sigmoid(clean_logit_batch.float()).detach().cpu().tolist()
 
                 if attack == 'fgsm':
                     adv = fgsm_image(attack_callable, images, tokens, lab_t, epsilon=epsilon)
@@ -244,6 +356,19 @@ def main() -> int:
                 attacked_probs.extend(torch.sigmoid(logit_adv.float()).detach().cpu().tolist())
                 attacked_labels.extend(int(x) for x in b['labels'].tolist())
                 attacked_ids.extend(b['ids'])
+
+                if args.sample_limit > 0 and len(sample_records) < args.sample_limit:
+                    sample_records.extend(
+                        _collect_sample_records(
+                            b,
+                            adv,
+                            clean_probs_batch,
+                            torch.sigmoid(logit_adv.float()).detach().cpu().tolist(),
+                            attack=attack,
+                            eps_num=eps_num,
+                            max_samples=args.sample_limit - len(sample_records),
+                        )
+                    )
 
             clean_subset = clean_probs[: len(attacked_probs)]
             attacked = classification_metrics(
@@ -283,6 +408,8 @@ def main() -> int:
                 'examples': examples,
             }
             cells.append(cell)
+            if sample_records:
+                _save_sample_records(sample_root, attack, eps_num, sample_records)
             print(
                 f"{attack:<4s}  eps={eps_num}/255  steps={steps_used:>2d}  "
                 f"AUROC={attacked.auroc:.4f}  F1={attacked.macro_f1:.4f}  "
