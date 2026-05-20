@@ -185,6 +185,9 @@ def main() -> None:  # noqa: C901
     # ----------------------------------------------------------------- adversarial params
     robust_cfg = cfg.get("robust", {})
     adv_settings = _load_attack_settings(robust_cfg)
+    adv_training_type = str(robust_cfg.get("adv_training_type", "hybrid"))
+    alpha = float(train_cfg.get("alpha", 0.5))
+    float(train_cfg["lr_head"])
 
     # Initial evaluation before training starts
     initial_clean_val = _evaluate(model, val_loader, device, use_amp, amp_dtype)
@@ -202,6 +205,8 @@ def main() -> None:  # noqa: C901
         "trainable_params": model.trainable_parameter_count(),
         "total_params": model.total_parameter_count(),
         "amp_dtype": amp_dtype_name,
+        "adv_training_type": adv_training_type,
+        "alpha": alpha,
         "adversarial_settings": adv_settings,
         "initial_clean_dev": initial_clean_val["macro_f1"],
         "initial_perturbed_dev": initial_perturbed_val["macro_f1"],
@@ -255,7 +260,7 @@ def main() -> None:  # noqa: C901
     # ------------------------------------------------------------------ loop
     best_perturbed_f1 = -1.0
     best_clean_f1 = -1.0
-    patience = int(train_cfg.get("early_stop_patience", 3))
+    patience = int(train_cfg.get("early_stop_patience", 100))
     epochs_since_improve = 0
     global_step = 0
     t0 = time.time()
@@ -300,20 +305,32 @@ def main() -> None:  # noqa: C901
             if use_amp:
                 with torch.autocast(device_type="cuda", dtype=amp_dtype):
                     logit_clean = model(images, tokens)
-                    loss_clean = F.binary_cross_entropy_with_logits(logit_clean, labels, pos_weight=pos_weight)
-                    
                     logit_adv = model(adv_images.to(device), tokens)
-                    loss_adv = F.binary_cross_entropy_with_logits(logit_adv, labels, pos_weight=pos_weight)
-
-                    loss = 0.5 * loss_clean + 0.5 * loss_adv
+                    loss_clean = F.binary_cross_entropy_with_logits(logit_clean, labels, pos_weight=pos_weight)
+                    if adv_training_type == "trades":
+                        prob_clean = torch.sigmoid(logit_clean)
+                        prob_adv = torch.sigmoid(logit_adv)
+                        loss_adv = prob_clean * (torch.log(prob_clean + 1e-7) - torch.log(prob_adv + 1e-7)) + \
+                                    (1 - prob_clean) * (torch.log(1 - prob_clean + 1e-7) - torch.log(1 - prob_adv + 1e-7))
+                        loss_adv = loss_adv.mean()
+                    else:
+                        loss_adv = F.binary_cross_entropy_with_logits(logit_adv, labels, pos_weight=pos_weight)
+                    
+                    loss = alpha * loss_clean + (1-alpha) * loss_adv
             else:
                 logit_clean = model(images, tokens)
-                loss_clean = F.binary_cross_entropy_with_logits(logit_clean, labels, pos_weight=pos_weight)
-                
                 logit_adv = model(adv_images.to(device), tokens)
-                loss_adv = F.binary_cross_entropy_with_logits(logit_adv, labels, pos_weight=pos_weight)
-
-                loss = 0.5 * loss_clean + 0.5 * loss_adv
+                loss_clean = F.binary_cross_entropy_with_logits(logit_clean, labels, pos_weight=pos_weight)
+                if adv_training_type == "trades":
+                    prob_clean = torch.sigmoid(logit_clean)
+                    prob_adv = torch.sigmoid(logit_adv)
+                    loss_adv = prob_clean * (torch.log(prob_clean + 1e-7) - torch.log(prob_adv + 1e-7)) + \
+                                (1 - prob_clean) * (torch.log(1 - prob_clean + 1e-7) - torch.log(1 - prob_adv + 1e-7))
+                    loss_adv = loss_adv.mean()
+                else:
+                    loss_adv = F.binary_cross_entropy_with_logits(logit_adv, labels, pos_weight=pos_weight)
+                
+                loss = alpha * loss_clean + (1-alpha) * loss_adv
 
             loss.backward()
             optimizer.step()
@@ -328,6 +345,7 @@ def main() -> None:  # noqa: C901
                     "epoch": epoch,
                     "step": global_step,
                     "train_loss": float(loss.detach()),
+                    "adv_training_type": adv_training_type,
                     "adv_epsilon_over_255": adv_setting["epsilon_over_255"],
                     "adv_pgd_steps": adv_setting["pgd_steps"],
                     "adv_pgd_alpha_frac": adv_setting["pgd_alpha_frac"],

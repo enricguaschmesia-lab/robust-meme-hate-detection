@@ -179,6 +179,10 @@ def main() -> int:
         '--max-batches', type=int, default=0,
         help="0 = attack the full split. >0 caps attack batches per cell (smoke).",
     )
+    parser.add_argument(
+        '--norm', default='linf', choices=('linf', 'l2'),
+        help="Norm to use for attacks: 'linf' (default) or 'l2'.",
+    )
     args = parser.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text(encoding='utf-8'))
@@ -337,12 +341,12 @@ def main() -> int:
                 clean_probs_batch = torch.sigmoid(clean_logit_batch.float()).detach().cpu().tolist()
 
                 if attack == 'fgsm':
-                    adv = fgsm_image(attack_callable, images, tokens, lab_t, epsilon=epsilon)
+                    adv = fgsm_image(attack_callable, images, tokens, lab_t, epsilon=epsilon, norm=args.norm)
                 else:
                     adv = pgd_image(
                         attack_callable, images, tokens, lab_t,
                         epsilon=epsilon, alpha=alpha, steps=steps_used,
-                        random_start=True,
+                        random_start=True, norm=args.norm,
                     )
                 with torch.no_grad():
                     with torch.autocast(
@@ -424,6 +428,7 @@ def main() -> int:
         'n': len(labels_flat),
         'global_seed': args.seed,
         'attacks': attacks,
+        'norm': args.norm,
         'epsilons_over_255': epsilon_nums,
         'pgd_steps': args.pgd_steps,
         'pgd_alpha_frac': args.pgd_alpha_frac,
