@@ -43,9 +43,16 @@ RECIPE_COLOR = {
     "kl":            "#2ca02c",  # green
     "kldrop":        "#d62728",  # red
     "kldrop-p015":   "#ff9896",  # light red
+    "kldrop-p025":   "#ff5722",  # deep orange (between p015 and p050)
     "kldrop-p050":   "#8c564b",  # dark red/brown
     "kllowmed":      "#9467bd",  # purple
 }
+
+# All recipe-grouped figures (Figs 1 / 2 / 2m / 2b / 2bm / 3 / 5) use the
+# six-recipe `MAIN_VARIANT_ORDER`. `kldrop-p025` is co-optimal with `kldrop-p015`
+# (image-only AUROC peak 0.668 on test_unseen) but is shown only in Fig 6's
+# dropout sweep — including it in the branch-revival figures duplicates the
+# co-optimality message and produces unreadable marker overlap with `p015`.
 
 
 def _plt():
@@ -119,32 +126,40 @@ def _per_recipe_summary(perturbed, recipe: str, split: str = "dev") -> dict:
 
 def fig_headline_pareto(perturbed_all):
     plt = _plt()
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.4), sharey=True)
+    handles_by_recipe: dict[str, object] = {}
     for ax, split in zip(axes, SPLITS):
         for recipe in agg.MAIN_VARIANT_ORDER:
             s = _per_recipe_summary(perturbed_all, recipe, split)
             if not s:
                 continue
-            ax.errorbar(s["clean_auroc_mean"], s["worst_text_mean"],
-                        xerr=s["clean_auroc_std"], yerr=s["worst_text_std"],
-                        marker="o", markersize=8, color=RECIPE_COLOR.get(recipe, "k"),
-                        capsize=3, linestyle="", label=recipe)
-            ax.annotate(recipe, (s["clean_auroc_mean"], s["worst_text_mean"]),
-                        xytext=(5, 5), textcoords="offset points", fontsize=8,
-                        color=RECIPE_COLOR.get(recipe, "k"))
+            (line, _, _) = ax.errorbar(
+                s["clean_auroc_mean"], s["worst_text_mean"],
+                xerr=s["clean_auroc_std"], yerr=s["worst_text_std"],
+                marker="o", markersize=8, color=RECIPE_COLOR.get(recipe, "k"),
+                capsize=3, linestyle="", label=recipe,
+            )
+            handles_by_recipe.setdefault(recipe, line)
         ax.set_title(SPLIT_LABEL[split], fontsize=10)
         ax.set_xlabel("Clean AUROC →")
         ax.invert_yaxis()  # smaller Δ is better; put it up
     axes[0].set_ylabel("Worst-cell text ΔAUROC ↓")
+    # Single shared legend across all three panels (recipe ↔ colour).
+    recipe_order = [r for r in agg.MAIN_VARIANT_ORDER if r in handles_by_recipe]
+    fig.legend([handles_by_recipe[r] for r in recipe_order], recipe_order,
+               loc="lower center", ncol=len(recipe_order), fontsize=9,
+               frameon=False, bbox_to_anchor=(0.5, -0.02))
     fig.suptitle("Headline Pareto: clean accuracy vs single-cell worst-case text robustness", fontsize=11)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
     _save(fig, "01_headline_pareto",
           "Per-recipe Pareto trade-off on each split. Down-right is better "
           "(high clean AUROC, low worst-cell ΔAUROC under text attacks). "
-          "`kldrop` (red) is the strict winner on Worst-cell text Δ across all "
-          "three splits; `kl` (green) preserves clean AUROC best. The two "
-          "Pareto winners are mechanistically distinct (modality dropout vs "
-          "KL consistency).")
+          "`kldrop-p050` (brown) is the strict winner on Worst-cell text Δ "
+          "across all three splits; `kldrop-p015` (light red) sits on the "
+          "Pareto front at zero clean-accuracy cost vs `kl`; `kl` (green) "
+          "preserves clean AUROC best. The legacy `kldrop` (p=0.30) is "
+          "Pareto-dominated by `kldrop-p015` and demoted to the appendix "
+          "(see `MAIN_VARIANT_ORDER` in `scripts/aggregate_phase4.py`).")
 
 
 # =============================================================================
@@ -153,14 +168,13 @@ def fig_headline_pareto(perturbed_all):
 
 def fig_image_branch_revival(modality_all):
     plt = _plt()
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4.2), sharey=True)
+    from matplotlib.lines import Line2D
+
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.5), sharey=True)
     baseline = 0.628  # dedicated image-only baseline (Phase 1-2)
+    baseline_line = None
     for ax, split in zip(axes, SPLITS):
         for variant in agg.MAIN_VARIANT_ORDER:
-            if variant == "clean":
-                key = None  # use stage1
-            else:
-                key = variant
             payloads = []
             for seed in (0, 1, 2):
                 if variant == "clean":
@@ -177,32 +191,332 @@ def fig_image_branch_revival(modality_all):
             ax.errorbar(variant, statistics.mean(mm),
                         yerr=statistics.pstdev(mm) if len(mm) > 1 else 0,
                         color=RECIPE_COLOR.get(variant, "k"),
-                        marker="^", markersize=8, capsize=3, linestyle="",
-                        label="multimodal" if variant == "clean" else None)
+                        marker="^", markersize=8, capsize=3, linestyle="")
             ax.errorbar(variant, statistics.mean(io),
                         yerr=statistics.pstdev(io) if len(io) > 1 else 0,
                         color=RECIPE_COLOR.get(variant, "k"),
                         marker="s", markersize=8, capsize=3, linestyle="",
-                        alpha=0.6,
-                        label="image-only" if variant == "clean" else None)
-        ax.axhline(baseline, ls="--", c="black", alpha=0.4, lw=1)
-        ax.text(len(agg.VARIANT_ORDER) - 0.5, baseline + 0.003,
-                f"dedicated image-only baseline = {baseline:.3f}",
-                fontsize=7, color="black", ha="right", va="bottom")
+                        alpha=0.6)
+        baseline_line = ax.axhline(baseline, ls="--", c="black", alpha=0.4, lw=1)
         ax.set_title(SPLIT_LABEL[split], fontsize=10)
         ax.tick_params(axis="x", rotation=30)
         ax.set_ylim(0.55, 0.78)
     axes[0].set_ylabel("AUROC")
-    axes[0].legend(loc="lower left", fontsize=8)
+    legend_handles = [
+        Line2D([0], [0], marker="^", color="black", linestyle="", markersize=8,
+               label="multimodal AUROC"),
+        Line2D([0], [0], marker="s", color="black", linestyle="", markersize=8,
+               alpha=0.6, label="image-only AUROC"),
+        Line2D([0], [0], color="black", linestyle="--", alpha=0.4, lw=1,
+               label=f"dedicated image-only baseline = {baseline:.3f}"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=3,
+               fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.02))
     fig.suptitle("Image-branch revival: multimodal (▲) and image-only (■) forward AUROC per recipe", fontsize=11)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
     _save(fig, "02_image_branch_revival",
           "Per-recipe multimodal (triangle) and image-only (square) AUROC on "
           "each split. The dashed line is the dedicated image-only baseline "
-          "(0.628 from Phase 1-2). `kldrop` is the only recipe whose image-only "
-          "AUROC exceeds the baseline on every split (0.636 / 0.641 / 0.655). "
-          "Modality-dropout-based image-branch revival generalises from dev to "
-          "both held-out splits.")
+          "(0.628 from Phase 1-2). Both modality-dropout recipes shown "
+          "(`kldrop-p015`, `kldrop-p050`) exceed the baseline on every split — "
+          "`kldrop-p015`: 0.638 / 0.638 / 0.658; `kldrop-p050`: 0.641 / 0.651 "
+          "/ 0.666. `kldrop-p015` matches the image-branch revival at zero "
+          "clean-accuracy cost vs `kl`. The intermediate point `kldrop-p025` "
+          "is co-optimal with `kldrop-p015` and is the image-only AUROC peak "
+          "(0.668 on test_unseen); it is omitted here to avoid marker overlap "
+          "and is shown in Fig 6's 7-point dropout sweep.")
+
+
+# =============================================================================
+# Figure 2m — Image-branch revival, single-panel merged across splits (poster)
+# =============================================================================
+
+def fig_image_branch_revival_merged(modality_all):
+    """Single-panel version of Fig 2 — collapses the 3 splits into one panel.
+
+    Per-recipe AUROC for the multimodal forward and the image-only forward,
+    averaged across (3 splits × 3 seeds). Error bars show split-σ — the σ of
+    the three per-split means (each per-split mean already averages over the
+    3 seeds). That visualises split-to-split reproducibility directly: a tiny
+    error bar means the recipe's branch AUROC barely moves between dev,
+    test_seen, and test_unseen.
+    """
+    plt = _plt()
+    from matplotlib.lines import Line2D
+    import numpy as np
+
+    baseline = 0.628  # dedicated image-only baseline (Phase 1-2)
+
+    def _per_split_mean(variant: str, branch: str, split: str) -> float | None:
+        vals = []
+        for seed in (0, 1, 2):
+            if variant == "clean":
+                p = modality_all.get((split, f"stage1-seed{seed}"))
+            else:
+                p = (modality_all.get((split, f"robust-{variant}-seed{seed}"))
+                     or modality_all.get((split, f"train-robust-{variant}-seed{seed}")))
+            if p is not None:
+                vals.append(p[branch]["at_best_threshold"]["auroc"])
+        return statistics.mean(vals) if vals else None
+
+    recipes_plotted: list[str] = []
+    mm_means: list[float] = []
+    mm_stds: list[float] = []
+    io_means: list[float] = []
+    io_stds: list[float] = []
+    for variant in agg.MAIN_VARIANT_ORDER:
+        mm_split_means = [v for split in SPLITS
+                          if (v := _per_split_mean(variant, "multimodal", split)) is not None]
+        io_split_means = [v for split in SPLITS
+                          if (v := _per_split_mean(variant, "image_only", split)) is not None]
+        if not mm_split_means or not io_split_means:
+            continue
+        recipes_plotted.append(variant)
+        mm_means.append(statistics.mean(mm_split_means))
+        mm_stds.append(statistics.pstdev(mm_split_means) if len(mm_split_means) > 1 else 0.0)
+        io_means.append(statistics.mean(io_split_means))
+        io_stds.append(statistics.pstdev(io_split_means) if len(io_split_means) > 1 else 0.0)
+
+    fig, ax = plt.subplots(figsize=(7.5, 5.0))
+    x = np.arange(len(recipes_plotted))
+    offset = 0.12
+    for xi, recipe in zip(x, recipes_plotted):
+        color = RECIPE_COLOR.get(recipe, "k")
+        ax.errorbar(xi - offset, mm_means[recipes_plotted.index(recipe)],
+                    yerr=mm_stds[recipes_plotted.index(recipe)],
+                    color=color, marker="^", markersize=10, capsize=4,
+                    linestyle="")
+        ax.errorbar(xi + offset, io_means[recipes_plotted.index(recipe)],
+                    yerr=io_stds[recipes_plotted.index(recipe)],
+                    color=color, marker="s", markersize=10, capsize=4,
+                    linestyle="", alpha=0.65)
+    ax.axhline(baseline, ls="--", c="black", alpha=0.45, lw=1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(recipes_plotted, rotation=20, ha="right")
+    ax.set_ylabel("AUROC  (mean across 3 splits × 3 seeds)")
+    ax.set_ylim(0.55, 0.78)
+
+    legend_handles = [
+        Line2D([0], [0], marker="^", color="black", linestyle="", markersize=10,
+               label="multimodal AUROC"),
+        Line2D([0], [0], marker="s", color="black", linestyle="", markersize=10,
+               alpha=0.65, label="image-only AUROC"),
+        Line2D([0], [0], color="black", linestyle="--", alpha=0.45, lw=1,
+               label=f"dedicated image-only baseline = {baseline:.3f}"),
+    ]
+    ax.legend(handles=legend_handles, loc="lower left", fontsize=9,
+              frameon=False)
+    ax.set_title("Image-branch revival — split-averaged "
+                 "(error bar = σ across dev / test_seen / test_unseen)",
+                 fontsize=10)
+    fig.tight_layout()
+    _save(fig, "02m_image_branch_revival_merged",
+          "Single-panel Fig 2 for the poster: per-recipe multimodal (▲) and "
+          "image-only (■) forward AUROC, averaged across the 3 splits (dev, "
+          "test_seen, test_unseen) and the 3 seeds. Error bar = σ of the "
+          "three per-split means — i.e. how much the answer shifts between "
+          "splits. Bars are uniformly small (≤ 0.012 AUROC) so the per-split "
+          "version (Fig 2) collapses without distortion. Dashed line = "
+          "dedicated image-only baseline (0.628). The kldrop family is the "
+          "only one above the baseline on image-only AUROC; split-averaged "
+          "image-only AUROC: `kldrop-p015` 0.645, `kldrop-p050` 0.653. The "
+          "intermediate `kldrop-p025` (image-only peak 0.668 on test_unseen) "
+          "is omitted here for marker readability — see Fig 6 for the full "
+          "7-point sweep. Use this version when poster real estate is tight; "
+          "use the 3-panel Fig 2 in the report appendix for the dev → test "
+          "reproduction story.")
+
+def fig_image_branch_revival_with_text(modality_all):
+    """Same as Fig 2 but adds text-only forward AUROC as a third marker.
+
+    Visually shows that `clean` carries ~all signal through the text branch
+    (the image branch is dead) and that modality-dropout recipes redistribute
+    capacity into the image branch rather than adding it.
+    """
+    plt = _plt()
+    from matplotlib.lines import Line2D
+
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4.8), sharey=True)
+    baseline_img = 0.628  # dedicated image-only baseline (Phase 1-2)
+    baseline_txt = 0.632  # dedicated text-only baseline (Phase 1-2)
+    for ax, split in zip(axes, SPLITS):
+        for variant in agg.MAIN_VARIANT_ORDER:
+            payloads = []
+            for seed in (0, 1, 2):
+                if variant == "clean":
+                    p = modality_all.get((split, f"stage1-seed{seed}"))
+                else:
+                    p = (modality_all.get((split, f"robust-{variant}-seed{seed}"))
+                         or modality_all.get((split, f"train-robust-{variant}-seed{seed}")))
+                if p is not None:
+                    payloads.append(p)
+            if not payloads:
+                continue
+            mm = [p["multimodal"]["at_best_threshold"]["auroc"] for p in payloads]
+            io = [p["image_only"]["at_best_threshold"]["auroc"] for p in payloads]
+            to = [p["text_only"]["at_best_threshold"]["auroc"] for p in payloads]
+            color = RECIPE_COLOR.get(variant, "k")
+            ax.errorbar(variant, statistics.mean(mm),
+                        yerr=statistics.pstdev(mm) if len(mm) > 1 else 0,
+                        color=color, marker="^", markersize=8, capsize=3,
+                        linestyle="")
+            ax.errorbar(variant, statistics.mean(io),
+                        yerr=statistics.pstdev(io) if len(io) > 1 else 0,
+                        color=color, marker="s", markersize=8, capsize=3,
+                        linestyle="", alpha=0.65)
+            ax.errorbar(variant, statistics.mean(to),
+                        yerr=statistics.pstdev(to) if len(to) > 1 else 0,
+                        color=color, marker="v", markersize=8, capsize=3,
+                        linestyle="", alpha=0.65, markerfacecolor="white")
+        ax.axhline(baseline_img, ls="--", c="black", alpha=0.35, lw=1)
+        ax.axhline(baseline_txt, ls=":", c="black", alpha=0.35, lw=1)
+        ax.set_title(SPLIT_LABEL[split], fontsize=10)
+        ax.tick_params(axis="x", rotation=30)
+        ax.set_ylim(0.50, 0.80)
+    axes[0].set_ylabel("AUROC")
+    legend_handles = [
+        Line2D([0], [0], marker="^", color="black", linestyle="", markersize=8,
+               label="multimodal AUROC"),
+        Line2D([0], [0], marker="s", color="black", linestyle="", markersize=8,
+               alpha=0.65, label="image-only AUROC"),
+        Line2D([0], [0], marker="v", color="black", linestyle="", markersize=8,
+               alpha=0.65, markerfacecolor="white", label="text-only AUROC"),
+        Line2D([0], [0], color="black", linestyle="--", alpha=0.4, lw=1,
+               label=f"image-only baseline = {baseline_img:.3f}"),
+        Line2D([0], [0], color="black", linestyle=":", alpha=0.4, lw=1,
+               label=f"text-only baseline = {baseline_txt:.3f}"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=5,
+               fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    fig.suptitle("Per-branch forward AUROC: multimodal (▲), image-only (■), text-only (▽)",
+                 fontsize=11)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    _save(fig, "02b_image_branch_revival_with_text",
+          "Augmented Fig 2 — adds text-only forward AUROC (open ▽) as a third "
+          "marker per recipe. Dotted line = dedicated text-only baseline "
+          "(0.632); dashed line = dedicated image-only baseline (0.628). On "
+          "`clean`, the text-only branch carries ~all the signal (the image "
+          "branch is dead at AUROC ≈ 0.59-0.60). KL alone lifts image-only "
+          "but does not match the dedicated image baseline. `kldrop-p015` and "
+          "`kldrop-p050` *redistribute* capacity: image-only AUROC rises "
+          "above the dedicated baseline while text-only AUROC remains within "
+          "seed noise of `kl`. The intermediate `kldrop-p025` is co-optimal "
+          "with `p015` and the image-only AUROC peak (0.668 on test_unseen); "
+          "it is omitted here for marker readability and is plotted in Fig 6. "
+          "The defense is branch-balancing, not signal-adding.")
+
+
+# =============================================================================
+# Figure 2bm — Single-panel Fig 2 + text-only branch (merged across splits)
+# =============================================================================
+
+def fig_image_branch_revival_with_text_merged(modality_all):
+    """Single-panel version of Fig 2b — three branches × all splits merged.
+
+    Per recipe shows multimodal (▲), image-only (■), and text-only (▽) forward
+    AUROC, each averaged across (3 splits × 3 seeds). Error bar = σ of the
+    three per-split means, so a tiny bar means "this answer holds on dev,
+    test_seen, and test_unseen alike". Tells the branch-redistribution story
+    in a single poster-sized panel.
+    """
+    plt = _plt()
+    from matplotlib.lines import Line2D
+    import numpy as np
+
+    baseline_img = 0.628
+    baseline_txt = 0.632
+
+    def _per_split_mean(variant: str, branch: str, split: str) -> float | None:
+        vals = []
+        for seed in (0, 1, 2):
+            if variant == "clean":
+                p = modality_all.get((split, f"stage1-seed{seed}"))
+            else:
+                p = (modality_all.get((split, f"robust-{variant}-seed{seed}"))
+                     or modality_all.get((split, f"train-robust-{variant}-seed{seed}")))
+            if p is not None:
+                vals.append(p[branch]["at_best_threshold"]["auroc"])
+        return statistics.mean(vals) if vals else None
+
+    def _merge(variant: str, branch: str) -> tuple[float, float] | None:
+        per_split = [v for split in SPLITS
+                     if (v := _per_split_mean(variant, branch, split)) is not None]
+        if not per_split:
+            return None
+        return (statistics.mean(per_split),
+                statistics.pstdev(per_split) if len(per_split) > 1 else 0.0)
+
+    recipes_plotted: list[str] = []
+    mm: list[tuple[float, float]] = []
+    io: list[tuple[float, float]] = []
+    to: list[tuple[float, float]] = []
+    for variant in agg.MAIN_VARIANT_ORDER:
+        a = _merge(variant, "multimodal")
+        b = _merge(variant, "image_only")
+        c = _merge(variant, "text_only")
+        if a is None or b is None or c is None:
+            continue
+        recipes_plotted.append(variant)
+        mm.append(a); io.append(b); to.append(c)
+
+    fig, ax = plt.subplots(figsize=(5.8, 5.2))
+    x = np.arange(len(recipes_plotted))
+    offsets = (-0.18, 0.0, 0.18)  # multimodal, image-only, text-only
+    for xi, recipe, (mm_m, mm_s), (io_m, io_s), (to_m, to_s) in zip(
+            x, recipes_plotted, mm, io, to):
+        color = RECIPE_COLOR.get(recipe, "k")
+        ax.errorbar(xi + offsets[0], mm_m, yerr=mm_s,
+                    color=color, marker="^", markersize=10, capsize=4,
+                    linestyle="")
+        ax.errorbar(xi + offsets[1], io_m, yerr=io_s,
+                    color=color, marker="s", markersize=10, capsize=4,
+                    linestyle="", alpha=0.65)
+        ax.errorbar(xi + offsets[2], to_m, yerr=to_s,
+                    color=color, marker="v", markersize=10, capsize=4,
+                    linestyle="", alpha=0.65, markerfacecolor="white")
+    ax.axhline(baseline_img, ls="--", c="black", alpha=0.4, lw=1)
+    ax.axhline(baseline_txt, ls=":", c="black", alpha=0.4, lw=1)
+    ax.set_xticks(x)
+    ax.set_xticklabels(recipes_plotted, rotation=20, ha="right")
+    ax.set_ylabel("AUROC  (mean across 3 splits × 3 seeds)")
+    ax.set_ylim(0.50, 0.80)
+
+    legend_handles = [
+        Line2D([0], [0], marker="s", color="black", linestyle="", markersize=10,
+               alpha=0.65, label="image-only AUROC"),
+        Line2D([0], [0], color="black", linestyle="--", alpha=0.4, lw=1,
+               label=f"image-only baseline = {baseline_img:.3f}"),
+        Line2D([0], [0], marker="v", color="black", linestyle="", markersize=10,
+               alpha=0.65, markerfacecolor="white", label="text-only AUROC"),
+        Line2D([0], [0], color="black", linestyle=":", alpha=0.4, lw=1,
+               label=f"text-only baseline = {baseline_txt:.3f}"),
+        Line2D([0], [0], marker="^", color="black", linestyle="", markersize=10,
+               label="multimodal AUROC"),
+    ]
+    ax.legend(handles=legend_handles, loc="lower center", ncol=3,
+              fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.30))
+    ax.set_title("Per-branch forward AUROC, split-averaged "
+                 "(bar = σ across dev / test_seen / test_unseen)",
+                 fontsize=10)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    _save(fig, "02bm_image_branch_revival_with_text_merged",
+          "Single-panel merge of Fig 2b for the poster. Per recipe, three "
+          "markers: multimodal (▲), image-only (■), text-only (open ▽), each "
+          "averaged across (3 splits × 3 seeds). Error bar = σ of the three "
+          "per-split means; uniformly ≤ 0.012 AUROC so the merge is "
+          "distortion-free. Dashed line = dedicated image-only baseline "
+          "(0.628); dotted line = dedicated text-only baseline (0.632). "
+          "Reads the branch-redistribution story in one panel: on `clean` "
+          "the text branch carries the signal (text-only ≈ baseline; image-"
+          "only well below baseline). `kl` lifts image-only modestly. "
+          "`kldrop-p015` and `kldrop-p050` push image-only above the "
+          "dedicated baseline while text-only stays within seed noise of "
+          "`kl` — the defense rebalances capacity, it does not add signal. "
+          "The intermediate `kldrop-p025` is co-optimal with `p015` and the "
+          "image-only AUROC peak (0.668 on test_unseen); it is plotted in "
+          "Fig 6 only, to keep markers readable here. Use this in place of "
+          "poster Fig 2 when the augmented branch story is the framing; keep "
+          "3-panel Figs 2 / 2b for the report.")
 
 
 # =============================================================================
@@ -216,7 +530,10 @@ def fig_composite_escalation(perturbed_all, split: str = "test_unseen"):
     plt = _plt()
     composite_types = ("composite_2text", "composite_2image",
                        "composite_text_image", "composite_2text_2image")
-    severities_order = ("medium", "mixed", "high")
+    # `mixed` severity dropped per Phase 9a finding (mixed ≈ medium for every
+    # recipe × composite type × split) — adding it as a third column added
+    # near-duplicate cells and stretched the heatmap without story gain.
+    severities_order = ("medium", "high")
     recipes = [r for r in agg.MAIN_VARIANT_ORDER if r != "clean"] + ["clean"]  # clean last
 
     # Build matrix: row = recipe, col = (composite_type, severity)
@@ -237,14 +554,7 @@ def fig_composite_escalation(perturbed_all, split: str = "test_unseen"):
             if vals:
                 mat[ri, ci] = float(np.mean(vals))
 
-    # Drop the "mixed" column entirely if there's no data anywhere yet
-    mixed_idx = [i for i, c in enumerate(cols) if c[1] == "mixed"]
-    if np.all(np.isnan(mat[:, mixed_idx])):
-        keep = [i for i in range(len(cols)) if i not in mixed_idx]
-        mat = mat[:, keep]
-        cols = [cols[i] for i in keep]
-
-    fig, ax = plt.subplots(figsize=(11, 4.5))
+    fig, ax = plt.subplots(figsize=(9.5, 4.5))
     im = ax.imshow(mat, cmap="RdBu_r", aspect="auto", vmin=-np.nanmax(np.abs(mat)),
                    vmax=np.nanmax(np.abs(mat)))
     ax.set_yticks(range(len(recipes)))
@@ -264,13 +574,18 @@ def fig_composite_escalation(perturbed_all, split: str = "test_unseen"):
     fig.tight_layout()
     _save(fig, "03_composite_escalation",
           "ΔAUROC under composite attacks (rows = recipes, columns = composite "
-          "type × severity). Lower (cool) is more robust. Composite "
-          "attacks are the strongest threat in the benchmark on "
+          "type × severity ∈ {medium, high}). Lower (cool) is more robust. "
+          "Composite attacks are the strongest threat in the benchmark on "
           "test_unseen: clean-baseline `composite_2text_2image` at high severity "
-          f"reaches ΔAUROC > 0.13. `kldrop` wins 3/4 medium-severity cells "
-          "and is competitive on the `mixed` severity. Single-perturbation "
-          "rankings (e.g. Worst-cell text Δ) understate the realistic "
-          "adversarial-user threat.")
+          f"reaches ΔAUROC > 0.13. `kldrop-p050` (brown) is the strongest "
+          "composite defender — lowest cell on every (type × severity) column "
+          "on test_unseen (composite_2text med Δ = 0.035, −51 % vs clean). "
+          "`kldrop-p015` (light red) is close behind at lower clean-accuracy "
+          "cost. The `mixed`-severity column is omitted: Phase 9a confirmed "
+          "`mixed ≈ medium` for every (recipe, composite type, split), so the "
+          "column added near-duplicate cells. Single-perturbation rankings "
+          "(e.g. Worst-cell text Δ) understate the realistic adversarial-user "
+          "threat.")
 
 
 # =============================================================================
@@ -281,63 +596,89 @@ def fig_class_asymmetric():
     plt = _plt()
     from collections import Counter
 
-    # Phase 10 refresh: use kldrop-p015 (the recommended default) vs kl
-    # instead of the now-dominated kldrop (p=0.30). The label-asymmetric
-    # finding is stronger on the new recipe on test_unseen (label=0 share
-    # 97 % at n=131 vs the old kldrop's 74 % at n=85).
+    # Test_unseen-only single-panel version for the poster (n=2000, the
+    # largest split and the strongest asymmetry: 97 % label-0 on kldrop-p015's
+    # corrections, CI [94 %, 99 %], n=131). The 3-panel dev/test_seen/unseen
+    # version lives in the report appendix.
     pair_a, pair_b = "kldrop-p015", "kl"
-    data = {}
-    for split in SPLITS:
-        captions = fa._load_captions(split)
-        table, _ = fa._build_full_table(
-            ["stage1", "augonly", "kl", "kldrop", "kldrop-p015",
-             "kldrop-p050", "kllowmed"],
-            [0, 1, 2], captions, split=split)
-        a_wins, b_wins = fa._disagreement_examples(table, pair_a, pair_b, [0, 1, 2])
-        data[split] = {
-            "a_wins": Counter(e["label"] for e in a_wins),
-            "b_wins": Counter(e["label"] for e in b_wins),
-        }
+    split = "test_unseen"
+    captions = fa._load_captions(split)
+    table, _ = fa._build_full_table(
+        ["stage1", "augonly", "kl", "kldrop", "kldrop-p015",
+         "kldrop-p050", "kllowmed"],
+        [0, 1, 2], captions, split=split)
+    a_wins, b_wins = fa._disagreement_examples(table, pair_a, pair_b, [0, 1, 2])
+    a = Counter(e["label"] for e in a_wins)
+    b = Counter(e["label"] for e in b_wins)
+    a0, a1 = a.get(0, 0), a.get(1, 0)
+    b0, b1 = b.get(0, 0), b.get(1, 0)
+    tot_a, tot_b = a0 + a1, b0 + b1
 
-    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.0), sharey=True)
-    width = 0.35
-    for ax, split in zip(axes, SPLITS):
-        d = data[split]
-        a = d["a_wins"]
-        b = d["b_wins"]
-        x = [0, 1]
-        a0 = a.get(0, 0); a1 = a.get(1, 0)
-        b0 = b.get(0, 0); b1 = b.get(1, 0)
-        ax.bar(x[0] - width / 2, a0, width, color="#1f77b4", label="label=0 (non-hate)")
-        ax.bar(x[0] + width / 2, a1, width, color="#d62728", label="label=1 (hate)")
-        ax.bar(x[1] - width / 2, b0, width, color="#1f77b4")
-        ax.bar(x[1] + width / 2, b1, width, color="#d62728")
-        ax.set_xticks(x)
-        ax.set_xticklabels([f"{pair_a}\nbeats {pair_b}",
-                            f"{pair_b}\nbeats {pair_a}"], fontsize=9)
-        ax.set_title(SPLIT_LABEL[split], fontsize=10)
-        tot_a = a0 + a1
-        tot_b = b0 + b1
-        if tot_a:
-            ax.text(x[0], max(a0, a1) + max(1, 0.05 * max(a0, a1)),
-                    f"{100*a0/tot_a:.0f}% l=0", ha="center", fontsize=8)
-        if tot_b:
-            ax.text(x[1], max(b0, b1) + max(1, 0.05 * max(b0, b1)),
-                    f"{100*b1/tot_b:.0f}% l=1", ha="center", fontsize=8)
-    axes[0].set_ylabel("Number of disagreement examples")
-    axes[0].legend(loc="upper left", fontsize=8)
-    fig.suptitle(f"Class-asymmetric `{pair_a}` vs `{pair_b}` per-example disagreements", fontsize=11)
+    # ---- Horizontal stacked bars: each row = one "wins" direction; segments
+    #      coloured by gold label. Bar length = total disagreements (n);
+    #      coloured-segment width = within-bar class composition. The
+    #      asymmetry reads directly as "this bar is mostly blue, that bar is
+    #      mostly red".
+    fig, ax = plt.subplots(figsize=(8.5, 3.6))
+    bar_h = 0.55
+    y_top, y_bot = 1, 0
+
+    # Top row: kldrop-p015 corrects vs kl  (mostly label=0)
+    ax.barh(y_top, a0, bar_h, color="#1f77b4", label="label=0 (non-hate)")
+    ax.barh(y_top, a1, bar_h, left=a0, color="#d62728", label="label=1 (hate)")
+    # Bottom row: kl corrects vs kldrop-p015  (mostly label=1)
+    ax.barh(y_bot, b0, bar_h, color="#1f77b4")
+    ax.barh(y_bot, b1, bar_h, left=b0, color="#d62728")
+
+    # In-segment percentage callouts on the dominant colour
+    if tot_a:
+        ax.text(a0 / 2, y_top, f"{100 * a0 / tot_a:.0f}% non-hate",
+                ha="center", va="center", color="white",
+                fontsize=12, fontweight="bold")
+    if tot_b:
+        ax.text(b0 + b1 / 2, y_bot, f"{100 * b1 / tot_b:.0f}% hate",
+                ha="center", va="center", color="white",
+                fontsize=12, fontweight="bold")
+
+    # Total-n labels at the right end of each bar
+    xpad = max(tot_a, tot_b) * 0.02
+    ax.text(tot_a + xpad, y_top, f"n = {tot_a}", va="center", fontsize=10)
+    ax.text(tot_b + xpad, y_bot, f"n = {tot_b}", va="center", fontsize=10)
+
+    ax.set_yticks([y_top, y_bot])
+    ax.set_yticklabels(
+        [f"`{pair_a}` corrects\n(vs `{pair_b}`)",
+         f"`{pair_b}` corrects\n(vs `{pair_a}`)"], fontsize=10)
+    ax.set_xlabel("Number of disagreement examples on test_unseen "
+                  "(n=2000, 3-seed majority bucket)")
+    ax.set_xlim(0, max(tot_a, tot_b) * 1.12)
+    ax.set_ylim(-0.6, 1.6)
+    ax.grid(axis="x", alpha=0.25)
+    ax.grid(axis="y", visible=False)
+    ax.set_title(
+        f"`{pair_a}` corrections target false positives — "
+        f"{100 * a0 / tot_a:.0f}% non-hate (95 % CI [94, 99], n={tot_a}); "
+        f"`{pair_b}` corrections target false negatives ({100 * b1 / tot_b:.0f}% hate, n={tot_b})",
+        fontsize=10)
+    ax.legend(loc="lower right", fontsize=9, framealpha=0.92)
     fig.tight_layout()
+
     _save(fig, "04_class_asymmetric_tradeoff",
-          f"Per-example disagreements between `{pair_a}` and `{pair_b}` "
-          "(majority bucket across 3 seeds). For each split, two grouped "
-          f"bars: examples where `{pair_a}` is naturally-robust and "
-          f"`{pair_b}` fails (left) vs the reverse (right). Blue = label=0 "
-          "(non-hate), red = label=1 (hate). The kldrop-p015 side strongly "
-          "biases toward label=0 on test_unseen (97 % at n=131), confirming "
-          "that the new recommended default reproduces the image-branch-"
-          "anchor-against-false-positives mechanism identified in Phase 6. "
-          "See `project_planning/Phase8_TestFailure_Report.md`.")
+          f"Per-example disagreements between `{pair_a}` and `{pair_b}` on "
+          "test_unseen (n=2000, 3-seed majority bucket). Two horizontal "
+          f"stacked bars: top = examples where `{pair_a}` is naturally robust "
+          f"and `{pair_b}` fails; bottom = the reverse. Each bar is split by "
+          "gold label (blue = label=0 non-hate, red = label=1 hate); bar "
+          "length = total disagreements (n shown). The asymmetry is direct: "
+          f"`{pair_a}` corrections are {100*a0/tot_a:.0f} % non-hate "
+          f"(95 % CI [94, 99], n={tot_a}) — the recipe acts as a false-"
+          f"positive veto. `{pair_b}` corrections are {100*b1/tot_b:.0f} % "
+          f"hate (n={tot_b}) — the opposite class. Mechanism: the kldrop-"
+          "p015-revived image branch (see Fig 2 / 6) vetoes the text branch "
+          "when the caption looks superficially hateful but the image does "
+          "not support it. Strongest single deployment-conditional finding "
+          "of the project. Dev / test_seen panels (smaller n, same "
+          "direction) live in the report appendix.")
 
 
 # =============================================================================
@@ -381,14 +722,15 @@ def fig_severity_curves(perturbed_all):
     axes[1].set_xlabel("Severity (medium = realistic, high = stress)")
     axes[2].set_xlabel("Severity")
     axes[2].legend(fontsize=7, loc="upper left", bbox_to_anchor=(1.02, 1.0))
-    fig.suptitle("Per-severity text-attack ΔAUROC — monotone, kldrop lowest at every severity", fontsize=11)
+    fig.suptitle("Per-severity text-attack ΔAUROC — monotone; kldrop-p050 lowest at every severity", fontsize=11)
     fig.tight_layout()
     _save(fig, "05_severity_curves",
           "Mean ΔAUROC for the text-attack family per severity, per recipe. "
           "Lower is better. Monotone low ≤ medium ≤ high for every (recipe, "
-          "split) row (sanity gate). `kldrop` (red) is the lowest at every "
-          "severity on every split; the medium column is the internet-"
-          "realistic threat headline.")
+          "split) row (sanity gate). `kldrop-p050` (brown) is the lowest at "
+          "every severity on every split; `kldrop-p015` (light red) is close "
+          "behind at zero clean-accuracy cost vs `kl`. The medium column is "
+          "the internet-realistic threat headline.")
 
 
 # =============================================================================
@@ -399,6 +741,11 @@ def fig_dropout_sweep(perturbed_all, modality_all):
     plt = _plt()
     # Phase 9c finer sweep: 7-point grid p ∈ {0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.50}.
     # p=0 is the kl recipe (no dropout); p=0.30 is the original kldrop (now Pareto-dominated).
+    # Plotted on test_unseen — the most naturalistic held-out split, where image-
+    # only AUROC peaks at 0.668 at p=0.25 (vs 0.644 on dev). Hyperparameter `p`
+    # was selected on dev in Phase 9c; this figure is post-hoc visualisation of
+    # the same evaluation on the held-out test_unseen split.
+    SWEEP_SPLIT = "test_unseen"
     p_to_recipe = [
         (0.00, "kl"),
         (0.10, "kldrop-p010"),
@@ -408,12 +755,11 @@ def fig_dropout_sweep(perturbed_all, modality_all):
         (0.30, "kldrop"),
         (0.50, "kldrop-p050"),
     ]
-    fig, ax1 = plt.subplots(figsize=(7, 4.5))
-    ax2 = ax1.twinx()
+    fig, ax1 = plt.subplots(figsize=(5.8, 5.2))
 
-    have_p015 = any(_payload_for(perturbed_all, "kldrop-p015", s, "dev") for s in (0, 1, 2))
+    have_p015 = any(_payload_for(perturbed_all, "kldrop-p015", s, SWEEP_SPLIT) for s in (0, 1, 2))
     if not have_p015:
-        print("  fig_dropout_sweep: kldrop-p015/p050 data not yet on disk — skipping")
+        print(f"  fig_dropout_sweep: kldrop-p015 data on {SWEEP_SPLIT} not yet on disk — skipping")
         plt.close(fig)
         return
 
@@ -429,7 +775,7 @@ def fig_dropout_sweep(perturbed_all, modality_all):
                 k = f"robust-kl-seed{seed}"
             elif recipe.startswith("kldrop"):
                 k = f"robust-{recipe}-seed{seed}"
-            payload = modality_all.get(("dev", k))
+            payload = modality_all.get((SWEEP_SPLIT, k))
             if payload is not None:
                 ma.append(payload["image_only"]["at_best_threshold"]["auroc"])
         cl = []
@@ -438,7 +784,7 @@ def fig_dropout_sweep(perturbed_all, modality_all):
                 k = f"robust-kl-seed{seed}"
             else:
                 k = f"robust-{recipe}-seed{seed}"
-            payload = perturbed_all.get(("dev", k))
+            payload = perturbed_all.get((SWEEP_SPLIT, k))
             if payload is not None:
                 cl.append(payload["clean"]["at_best_threshold"]["auroc"])
         if ma and cl:
@@ -451,29 +797,203 @@ def fig_dropout_sweep(perturbed_all, modality_all):
     if not ps:
         plt.close(fig); return
 
+    ax1.errorbar(ps, clean_means, yerr=clean_stds, marker="s", capsize=4,
+                 color="#1f77b4", label="clean (multimodal) AUROC")
     ax1.errorbar(ps, img_means, yerr=img_stds, marker="o", capsize=4,
                  color="#d62728", label="image-only AUROC")
-    ax1.axhline(0.628, ls="--", c="black", alpha=0.4, lw=1)
-    ax1.text(max(ps), 0.628 + 0.003, "image-only baseline = 0.628",
-             ha="right", va="bottom", fontsize=8, color="black")
+    ax1.axhline(0.628, ls=":", c="grey", alpha=0.7, lw=1.2,
+                label="dedicated image-only baseline (0.628)")
     ax1.set_xlabel("modality_dropout_text  p")
-    ax1.set_ylabel("image-only AUROC ↑", color="#d62728")
-    ax1.tick_params(axis="y", labelcolor="#d62728")
-
-    ax2.errorbar(ps, clean_means, yerr=clean_stds, marker="s", capsize=4,
-                 color="#1f77b4", label="clean AUROC")
-    ax2.set_ylabel("clean (multimodal) AUROC ↑", color="#1f77b4")
-    ax2.tick_params(axis="y", labelcolor="#1f77b4")
+    ax1.set_ylabel("AUROC ↑")
 
     ax1.set_xticks(ps)
-    ax1.set_title("Modality-dropout-rate sweep (dev, 3-seed mean ± σ)", fontsize=11)
+    ax1.set_title("Modality-dropout-rate sweep (test_unseen, 3-seed mean ± σ)", fontsize=11)
+    ax1.legend(loc="center right", fontsize=9, framealpha=0.95)
     fig.tight_layout()
     _save(fig, "06_dropout_sweep",
-          "Modality-dropout-rate sweep on dev. x-axis = `modality_dropout_text` "
-          "(p=0.00 is the `kl` recipe with no dropout). Image-only AUROC "
-          "(red) rises monotonically with p; clean AUROC (blue) falls. "
-          "The trade-off shows the Pareto frontier for image-branch revival "
-          "vs clean accuracy. The dedicated image-only baseline is 0.628.")
+          "Modality-dropout-rate sweep on test_unseen — 7 points: p ∈ {0, "
+          "0.10, 0.15, 0.20, 0.25, 0.30, 0.50} (Phase 9c). x-axis = "
+          "`modality_dropout_text` (p=0.00 is the `kl` recipe with no dropout; "
+          "p=0.30 is the legacy `kldrop`, now Pareto-dominated). Both series "
+          "share a single AUROC y-axis. Image-only AUROC (red ●) rises "
+          "monotonically with p and peaks at 0.668 at p=0.25 — well above the "
+          "dedicated image-only baseline of 0.628 (grey dotted). Clean "
+          "(multimodal) AUROC (blue ■) stays inside seed noise through "
+          "p ≤ 0.25 then drops by p = 0.30 — the 'first 25 % is free' window. "
+          "Hyperparameter `p` was selected on dev in Phase 9c; this figure is "
+          "the post-hoc visualisation of the same evaluation on the most "
+          "naturalistic held-out split. Shape reproduces on dev and test_seen "
+          "(see report appendix).")
+
+
+# =============================================================================
+# Figure 7 — Combined Fig 2bm (per-branch AUROC) + Fig 6 (dropout sweep)
+#            Side-by-side single image for the poster (shared AUROC y-axis).
+# =============================================================================
+
+def fig_combined_revival_and_sweep(modality_all, perturbed_all):
+    """One-image side-by-side composition of Fig 2bm and Fig 6 for the poster.
+
+    Both panels share the AUROC y-axis so the dedicated image-only baseline
+    (0.628) reads as one continuous horizontal line across the figure — the
+    mechanism (left) and the dose-response sweep (right) get visually fused
+    into a single argument.
+    """
+    plt = _plt()
+    from matplotlib.lines import Line2D
+    import numpy as np
+
+    baseline_img = 0.628
+    baseline_txt = 0.632
+
+    # ---------- LEFT PANEL DATA: per-recipe split-averaged AUROC × 3 branches
+    def _per_split_mean(variant: str, branch: str, split: str):
+        vals = []
+        for seed in (0, 1, 2):
+            if variant == "clean":
+                p = modality_all.get((split, f"stage1-seed{seed}"))
+            else:
+                p = (modality_all.get((split, f"robust-{variant}-seed{seed}"))
+                     or modality_all.get((split, f"train-robust-{variant}-seed{seed}")))
+            if p is not None:
+                vals.append(p[branch]["at_best_threshold"]["auroc"])
+        return statistics.mean(vals) if vals else None
+
+    def _merge(variant, branch):
+        per_split = [v for split in SPLITS
+                     if (v := _per_split_mean(variant, branch, split)) is not None]
+        if not per_split:
+            return None
+        return (statistics.mean(per_split),
+                statistics.pstdev(per_split) if len(per_split) > 1 else 0.0)
+
+    recipes_plotted: list[str] = []
+    mm: list[tuple[float, float]] = []
+    io: list[tuple[float, float]] = []
+    to: list[tuple[float, float]] = []
+    for variant in agg.MAIN_VARIANT_ORDER:
+        a, b, c = _merge(variant, "multimodal"), _merge(variant, "image_only"), _merge(variant, "text_only")
+        if a is None or b is None or c is None:
+            continue
+        recipes_plotted.append(variant)
+        mm.append(a); io.append(b); to.append(c)
+
+    # ---------- RIGHT PANEL DATA: dropout-rate sweep on test_unseen
+    SWEEP_SPLIT = "test_unseen"
+    p_to_recipe = [
+        (0.00, "kl"), (0.10, "kldrop-p010"), (0.15, "kldrop-p015"),
+        (0.20, "kldrop-p020"), (0.25, "kldrop-p025"), (0.30, "kldrop"),
+        (0.50, "kldrop-p050"),
+    ]
+    have_p015 = any(_payload_for(perturbed_all, "kldrop-p015", s, SWEEP_SPLIT) for s in (0, 1, 2))
+    if not (recipes_plotted and have_p015):
+        print("  fig_combined: required data not on disk — skipping")
+        return
+
+    ps, img_means, img_stds, clean_means, clean_stds = [], [], [], [], []
+    for p_val, recipe in p_to_recipe:
+        ma = []
+        for seed in (0, 1, 2):
+            k = f"robust-{recipe}-seed{seed}" if recipe != "kl" else f"robust-kl-seed{seed}"
+            payload = modality_all.get((SWEEP_SPLIT, k))
+            if payload is not None:
+                ma.append(payload["image_only"]["at_best_threshold"]["auroc"])
+        cl = []
+        for seed in (0, 1, 2):
+            k = f"robust-{recipe}-seed{seed}" if recipe != "kl" else f"robust-kl-seed{seed}"
+            payload = perturbed_all.get((SWEEP_SPLIT, k))
+            if payload is not None:
+                cl.append(payload["clean"]["at_best_threshold"]["auroc"])
+        if ma and cl:
+            ps.append(p_val)
+            img_means.append(statistics.mean(ma))
+            img_stds.append(statistics.pstdev(ma) if len(ma) > 1 else 0)
+            clean_means.append(statistics.mean(cl))
+            clean_stds.append(statistics.pstdev(cl) if len(cl) > 1 else 0)
+
+    # ---------- FIGURE
+    fig, (ax_L, ax_R) = plt.subplots(
+        1, 2, figsize=(12.0, 5.9), sharey=True,
+        gridspec_kw={"wspace": 0.06, "width_ratios": [1.05, 1.0]},
+    )
+
+    # ---------- LEFT PANEL: per-branch AUROC per recipe
+    x = np.arange(len(recipes_plotted))
+    offsets = (-0.18, 0.0, 0.18)
+    for xi, recipe, (mm_m, mm_s), (io_m, io_s), (to_m, to_s) in zip(
+            x, recipes_plotted, mm, io, to):
+        color = RECIPE_COLOR.get(recipe, "k")
+        ax_L.errorbar(xi + offsets[0], mm_m, yerr=mm_s, color=color,
+                      marker="^", markersize=9, capsize=3, linestyle="")
+        ax_L.errorbar(xi + offsets[1], io_m, yerr=io_s, color=color,
+                      marker="s", markersize=9, capsize=3, linestyle="",
+                      alpha=0.65)
+        ax_L.errorbar(xi + offsets[2], to_m, yerr=to_s, color=color,
+                      marker="v", markersize=9, capsize=3, linestyle="",
+                      alpha=0.65, markerfacecolor="white")
+    ax_L.axhline(baseline_img, ls="--", c="black", alpha=0.45, lw=1)
+    ax_L.axhline(baseline_txt, ls=":", c="black", alpha=0.45, lw=1)
+    ax_L.set_xticks(x)
+    ax_L.set_xticklabels(recipes_plotted, rotation=20, ha="right")
+    ax_L.set_ylabel("AUROC")
+    ax_L.set_ylim(0.575, 0.770)
+    ax_L.set_title("(a) Per-branch AUROC, split-averaged",
+                   fontsize=10)
+
+    left_legend = [
+        Line2D([0], [0], marker="^", color="black", linestyle="", markersize=9,
+               label="multimodal"),
+        Line2D([0], [0], marker="s", color="black", linestyle="", markersize=9,
+               alpha=0.65, label="image-only"),
+        Line2D([0], [0], marker="v", color="black", linestyle="", markersize=9,
+               alpha=0.65, markerfacecolor="white", label="text-only"),
+        Line2D([0], [0], color="black", linestyle=":", alpha=0.45, lw=1,
+               label=f"text-only baseline ({baseline_txt:.3f})"),
+        Line2D([0], [0], color="black", linestyle="--", alpha=0.45, lw=1,
+               label=f"image-only baseline ({baseline_img:.3f})"),
+    ]
+    ax_L.legend(handles=left_legend, loc="upper center", fontsize=8,
+                framealpha=0.92, ncol=3, frameon=False,
+                bbox_to_anchor=(0.5, -0.13))
+
+    # ---------- RIGHT PANEL: dropout-rate sweep
+    ax_R.errorbar(ps, clean_means, yerr=clean_stds, marker="s", capsize=4,
+                  color="#1f77b4", label="clean (multimodal) AUROC")
+    ax_R.errorbar(ps, img_means, yerr=img_stds, marker="o", capsize=4,
+                  color="#d62728", label="image-only AUROC")
+    ax_R.axhline(baseline_img, ls="--", c="black", alpha=0.45, lw=1)
+    ax_R.set_xticks(ps)
+    ax_R.set_xlabel("modality_dropout_text  p")
+    ax_R.set_title("(b) Dropout-rate sweep (test_unseen)",
+                   fontsize=10)
+    ax_R.legend(loc="upper center", fontsize=8, framealpha=0.92,
+                ncol=2, frameon=False, bbox_to_anchor=(0.5, -0.13))
+
+    fig.suptitle("Image-branch revival: redistribution mechanism (a) "
+                 "and dropout-rate dose-response (b)",
+                 fontsize=11)
+    fig.tight_layout(rect=(0, 0.05, 1, 0.95))
+    _save(fig, "07_combined_revival_and_sweep",
+          "Side-by-side merge of Fig 2bm and Fig 6 for the poster — one image, "
+          "two panels, shared AUROC y-axis so the dedicated image-only baseline "
+          "(0.628) reads as a single horizontal line spanning the figure. "
+          "(a) Per-recipe per-branch forward AUROC, averaged across 3 splits × "
+          "3 seeds (error bar = σ of the 3 per-split means; uniformly ≤ 0.012 "
+          "AUROC). `clean` carries signal only through text (text-only ≈ "
+          "baseline; image-only well below); `kl` lifts image-only modestly; "
+          "`kldrop-p015` and `kldrop-p050` push image-only above the dedicated "
+          "baseline while text-only stays within seed noise of `kl`. "
+          "(b) Modality-dropout-rate sweep on test_unseen (Phase 9c): 7 "
+          "points p ∈ {0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.50}. Image-only "
+          "AUROC (red ●) rises monotonically and peaks at 0.668 at p = 0.25 "
+          "— well above the dedicated image-only baseline of 0.628 (dashed). "
+          "Clean (multimodal) AUROC (blue ■) stays inside seed noise through "
+          "p ≤ 0.25 then drops by p = 0.30 — the 'first 25 % is free' window. "
+          "Hyperparameter `p` was chosen on dev in Phase 9c; (b) is the "
+          "post-hoc visualisation of the same evaluation on the most "
+          "naturalistic held-out split. Use this composite in place of "
+          "separate Fig 2bm + Fig 6 when poster real estate allows one wide "
+          "slot.")
 
 
 # =============================================================================
@@ -494,6 +1014,12 @@ def main() -> int:
     fig_headline_pareto(perturbed_all)
     print("Figure 2: image_branch_revival")
     fig_image_branch_revival(modality_all)
+    print("Figure 2m: image_branch_revival_merged (single-panel; poster-side)")
+    fig_image_branch_revival_merged(modality_all)
+    print("Figure 2b: image_branch_revival_with_text (augmented; report-side)")
+    fig_image_branch_revival_with_text(modality_all)
+    print("Figure 2bm: image_branch_revival_with_text_merged (single-panel; poster-side)")
+    fig_image_branch_revival_with_text_merged(modality_all)
     print("Figure 3: composite_escalation (test_unseen)")
     fig_composite_escalation(perturbed_all, split="test_unseen")
     print("Figure 4: class_asymmetric_tradeoff")
@@ -502,6 +1028,8 @@ def main() -> int:
     fig_severity_curves(perturbed_all)
     print("Figure 6: dropout_sweep (skipped until kldrop-p015/p050 land)")
     fig_dropout_sweep(perturbed_all, modality_all)
+    print("Figure 7: combined Fig 2bm + Fig 6 side-by-side (poster wide slot)")
+    fig_combined_revival_and_sweep(modality_all, perturbed_all)
 
     print()
     print(f"All figures in {OUT_DIR.relative_to(REPO)}/")
