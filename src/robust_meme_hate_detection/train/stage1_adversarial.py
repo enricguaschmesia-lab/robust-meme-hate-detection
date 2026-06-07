@@ -185,7 +185,7 @@ def main() -> None:  # noqa: C901
     # ----------------------------------------------------------------- adversarial params
     robust_cfg = cfg.get("robust", {})
     adv_settings = _load_attack_settings(robust_cfg)
-    adv_training_type = str(robust_cfg.get("adv_training_type", "hybrid"))
+    adv_training_type = str(train_cfg.get("adv_training_type", "hybrid"))
     alpha = float(train_cfg.get("alpha", 0.5))
     float(train_cfg["lr_head"])
 

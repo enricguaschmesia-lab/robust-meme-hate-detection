@@ -10,7 +10,7 @@ set -euo pipefail
 
 # ---------------- EDIT ME --------------------------------------------------
 
-JOB="${JOB:-adversarial-balanced-stage1-seed0-$(date +%Y%m%d-%H%M%S)}"
+JOB="${JOB:-adversarial-balanced-trades-$(date +%Y%m%d-%H%M%S)}"
 IMAGE="${IMAGE:-registry.rcp.epfl.ch/ee-559-guasch/robust-meme-hate-detection:v0.2}"
 USER_UID="316497"
 
