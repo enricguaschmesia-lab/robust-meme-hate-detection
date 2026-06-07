@@ -19,7 +19,7 @@ data:
 
 train:
   batch_size: 64
-  epochs: 40
+  epochs: 100
   lr_head: 1.0e-4
   lr_vis: 1.0e-6
   weight_decay: 1.0e-2
@@ -28,23 +28,23 @@ train:
   early_stop_patience: 100
   early_stop_metric: macro_f1
   pos_weight_auto: true
-  adv_training_type: hybrid
-  alpha: 0.5
+  adv_training_type: trades
+  alpha: 0.6
 
 robust:
   attack_settings:
     - epsilon_over_255: 1
-      pgd_steps: 25
+      pgd_steps: 10
       pgd_alpha_frac: 0.25
     - epsilon_over_255: 2
-      pgd_steps: 25
+      pgd_steps: 10
       pgd_alpha_frac: 0.25
     - epsilon_over_255: 4
-      pgd_steps: 25
+      pgd_steps: 10
       pgd_alpha_frac: 0.25
     - epsilon_over_255: 8
-      pgd_steps: 25
+      pgd_steps: 10
       pgd_alpha_frac: 0.25
     - epsilon_over_255: 12
-      pgd_steps: 25
+      pgd_steps: 10
       pgd_alpha_frac: 0.25
