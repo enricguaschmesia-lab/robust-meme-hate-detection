@@ -4,7 +4,7 @@ Reuses the aggregator's data loaders (`scripts/aggregate_phase4.py`) so the
 figures are always in sync with the per-phase tables. Each figure has its
 own function; figures gracefully skip if their data isn't on disk yet.
 
-Output: `project_planning/poster_figures/{fig_name}.{png,pdf}` plus a
+Output: `project_planning/poster_figures/{fig_name}.{png,pdf,svg}` plus a
 matching `*.caption.txt` with a one-paragraph caption.
 
 Run:  PYTHONPATH=src .venv/bin/python3 scripts/make_poster_figures.py
@@ -35,6 +35,20 @@ SPLITS = ("dev", "test_seen", "test_unseen")
 SPLIT_LABEL = {"dev": "dev (n=500, 36% pos)",
                "test_seen": "test_seen (n=1000, 49% pos)",
                "test_unseen": "test_unseen (n=2000, 37% pos)"}
+
+# Split-matched dedicated image-only baseline AUROCs from the Phase 1-2 image-
+# only baseline checkpoint (`cluster-results/baseline-image-seed0/ckpt/best.pt`)
+# evaluated on each split via `run_perturbed --modality image`. dev value is
+# from `perturbed-baseline-image-seed0`; test_{seen,unseen} are from
+# `perturbed-baseline-image-test-{seen,unseen}-seed0` (post-Phase-10
+# follow-up). The text-only baseline is from `baseline-text-seed0` on dev.
+BASELINE_IMG_BY_SPLIT = {
+    "dev":         0.628,
+    "test_seen":   0.640,
+    "test_unseen": 0.650,
+}
+BASELINE_IMG_SPLIT_AVG = sum(BASELINE_IMG_BY_SPLIT.values()) / len(BASELINE_IMG_BY_SPLIT)  # ≈ 0.639
+BASELINE_TXT_DEV = 0.632
 
 # Color palette: tab10-derived, recipe-grouped
 RECIPE_COLOR = {
@@ -68,6 +82,7 @@ def _plt():
         "figure.dpi": 110,
         "savefig.dpi": 300,
         "savefig.bbox": "tight",
+        "svg.fonttype": "none",
     })
     return plt
 
@@ -76,11 +91,13 @@ def _save(fig, name: str, caption: str) -> None:
     import matplotlib.pyplot as plt
     png = OUT_DIR / f"{name}.png"
     pdf = OUT_DIR / f"{name}.pdf"
+    svg = OUT_DIR / f"{name}.svg"
     fig.savefig(png)
     fig.savefig(pdf)
+    fig.savefig(svg)
     (OUT_DIR / f"{name}.caption.txt").write_text(caption.strip() + "\n", encoding="utf-8")
     plt.close(fig)
-    print(f"  wrote {png.relative_to(REPO)} + {pdf.name} + caption")
+    print(f"  wrote {png.relative_to(REPO)} + {pdf.name} + {svg.name} + caption")
 
 
 # ---------------------------------------------------------------- helpers
@@ -171,9 +188,11 @@ def fig_image_branch_revival(modality_all):
     from matplotlib.lines import Line2D
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.5), sharey=True)
-    baseline = 0.628  # dedicated image-only baseline (Phase 1-2)
+    # Split-matched dedicated image-only baseline (Phase 1-2 + post-Phase-10
+    # follow-up runs on the held-out test splits).
     baseline_line = None
     for ax, split in zip(axes, SPLITS):
+        baseline = BASELINE_IMG_BY_SPLIT[split]
         for variant in agg.MAIN_VARIANT_ORDER:
             payloads = []
             for seed in (0, 1, 2):
@@ -198,6 +217,9 @@ def fig_image_branch_revival(modality_all):
                         marker="s", markersize=8, capsize=3, linestyle="",
                         alpha=0.6)
         baseline_line = ax.axhline(baseline, ls="--", c="black", alpha=0.4, lw=1)
+        ax.text(0.02, baseline + 0.004, f"baseline = {baseline:.3f}",
+                transform=ax.get_yaxis_transform(), ha="left", va="bottom",
+                fontsize=8, color="black", alpha=0.6)
         ax.set_title(SPLIT_LABEL[split], fontsize=10)
         ax.tick_params(axis="x", rotation=30)
         ax.set_ylim(0.55, 0.78)
@@ -208,7 +230,7 @@ def fig_image_branch_revival(modality_all):
         Line2D([0], [0], marker="s", color="black", linestyle="", markersize=8,
                alpha=0.6, label="image-only AUROC"),
         Line2D([0], [0], color="black", linestyle="--", alpha=0.4, lw=1,
-               label=f"dedicated image-only baseline = {baseline:.3f}"),
+               label="dedicated image-only baseline (split-matched)"),
     ]
     fig.legend(handles=legend_handles, loc="lower center", ncol=3,
                fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.02))
@@ -216,15 +238,21 @@ def fig_image_branch_revival(modality_all):
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     _save(fig, "02_image_branch_revival",
           "Per-recipe multimodal (triangle) and image-only (square) AUROC on "
-          "each split. The dashed line is the dedicated image-only baseline "
-          "(0.628 from Phase 1-2). Both modality-dropout recipes shown "
-          "(`kldrop-p015`, `kldrop-p050`) exceed the baseline on every split — "
-          "`kldrop-p015`: 0.638 / 0.638 / 0.658; `kldrop-p050`: 0.641 / 0.651 "
-          "/ 0.666. `kldrop-p015` matches the image-branch revival at zero "
+          "each split. The dashed line on each panel is the split-matched "
+          "dedicated image-only baseline (0.628 / 0.640 / 0.650 on dev / "
+          "test_seen / test_unseen, evaluated on the Phase 1-2 image-only "
+          "checkpoint). Both modality-dropout recipes shown (`kldrop-p015`, "
+          "`kldrop-p050`) match or exceed the baseline on every split — "
+          "`kldrop-p015`: 0.638 / 0.638 / 0.658 (Δ = +0.010 / −0.002 / +0.008 "
+          "vs baseline); `kldrop-p050`: 0.641 / 0.651 / 0.666 (Δ = +0.013 / "
+          "+0.011 / +0.016). By contrast `kl`'s image-only AUROC is "
+          "uniformly below the split-matched baseline (Δ = −0.017 / −0.035 / "
+          "−0.022). `kldrop-p015` matches the image-branch revival at zero "
           "clean-accuracy cost vs `kl`. The intermediate point `kldrop-p025` "
           "is co-optimal with `kldrop-p015` and is the image-only AUROC peak "
-          "(0.668 on test_unseen); it is omitted here to avoid marker overlap "
-          "and is shown in Fig 6's 7-point dropout sweep.")
+          "(0.668 on test_unseen, +0.018 above the split-matched baseline); "
+          "it is omitted here to avoid marker overlap and is shown in Fig 6's "
+          "7-point dropout sweep.")
 
 
 # =============================================================================
@@ -245,7 +273,7 @@ def fig_image_branch_revival_merged(modality_all):
     from matplotlib.lines import Line2D
     import numpy as np
 
-    baseline = 0.628  # dedicated image-only baseline (Phase 1-2)
+    baseline = BASELINE_IMG_SPLIT_AVG  # mean(0.628, 0.640, 0.650) ≈ 0.639
 
     def _per_split_mean(variant: str, branch: str, split: str) -> float | None:
         vals = []
@@ -302,7 +330,7 @@ def fig_image_branch_revival_merged(modality_all):
         Line2D([0], [0], marker="s", color="black", linestyle="", markersize=10,
                alpha=0.65, label="image-only AUROC"),
         Line2D([0], [0], color="black", linestyle="--", alpha=0.45, lw=1,
-               label=f"dedicated image-only baseline = {baseline:.3f}"),
+               label=f"image-only baseline (split-avg) = {baseline:.3f}"),
     ]
     ax.legend(handles=legend_handles, loc="lower left", fontsize=9,
               frameon=False)
@@ -317,13 +345,15 @@ def fig_image_branch_revival_merged(modality_all):
           "three per-split means — i.e. how much the answer shifts between "
           "splits. Bars are uniformly small (≤ 0.012 AUROC) so the per-split "
           "version (Fig 2) collapses without distortion. Dashed line = "
-          "dedicated image-only baseline (0.628). The kldrop family is the "
-          "only one above the baseline on image-only AUROC; split-averaged "
-          "image-only AUROC: `kldrop-p015` 0.645, `kldrop-p050` 0.653. The "
-          "intermediate `kldrop-p025` (image-only peak 0.668 on test_unseen) "
-          "is omitted here for marker readability — see Fig 6 for the full "
-          "7-point sweep. Use this version when poster real estate is tight; "
-          "use the 3-panel Fig 2 in the report appendix for the dev → test "
+          f"split-averaged dedicated image-only baseline = {baseline:.3f} "
+          "(= mean(0.628, 0.640, 0.650) over the per-split Phase 1-2 image-"
+          "only checkpoint evaluations). The kldrop family is the only one "
+          "above the baseline on image-only AUROC; split-averaged image-only "
+          "AUROC: `kldrop-p015` 0.645, `kldrop-p050` 0.653. The intermediate "
+          "`kldrop-p025` (image-only peak 0.668 on test_unseen) is omitted "
+          "here for marker readability — see Fig 6 for the full 7-point "
+          "sweep. Use this version when poster real estate is tight; use the "
+          "3-panel Fig 2 in the report appendix for the dev → test "
           "reproduction story.")
 
 def fig_image_branch_revival_with_text(modality_all):
@@ -337,9 +367,9 @@ def fig_image_branch_revival_with_text(modality_all):
     from matplotlib.lines import Line2D
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4.8), sharey=True)
-    baseline_img = 0.628  # dedicated image-only baseline (Phase 1-2)
-    baseline_txt = 0.632  # dedicated text-only baseline (Phase 1-2)
+    baseline_txt = BASELINE_TXT_DEV  # dedicated text-only baseline (dev only)
     for ax, split in zip(axes, SPLITS):
+        baseline_img = BASELINE_IMG_BY_SPLIT[split]
         for variant in agg.MAIN_VARIANT_ORDER:
             payloads = []
             for seed in (0, 1, 2):
@@ -382,9 +412,9 @@ def fig_image_branch_revival_with_text(modality_all):
         Line2D([0], [0], marker="v", color="black", linestyle="", markersize=8,
                alpha=0.65, markerfacecolor="white", label="text-only AUROC"),
         Line2D([0], [0], color="black", linestyle="--", alpha=0.4, lw=1,
-               label=f"image-only baseline = {baseline_img:.3f}"),
+               label="image-only baseline (split-matched)"),
         Line2D([0], [0], color="black", linestyle=":", alpha=0.4, lw=1,
-               label=f"text-only baseline = {baseline_txt:.3f}"),
+               label=f"text-only baseline = {baseline_txt:.3f} (dev)"),
     ]
     fig.legend(handles=legend_handles, loc="lower center", ncol=5,
                fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.02))
@@ -394,16 +424,20 @@ def fig_image_branch_revival_with_text(modality_all):
     _save(fig, "02b_image_branch_revival_with_text",
           "Augmented Fig 2 — adds text-only forward AUROC (open ▽) as a third "
           "marker per recipe. Dotted line = dedicated text-only baseline "
-          "(0.632); dashed line = dedicated image-only baseline (0.628). On "
-          "`clean`, the text-only branch carries ~all the signal (the image "
-          "branch is dead at AUROC ≈ 0.59-0.60). KL alone lifts image-only "
-          "but does not match the dedicated image baseline. `kldrop-p015` and "
-          "`kldrop-p050` *redistribute* capacity: image-only AUROC rises "
-          "above the dedicated baseline while text-only AUROC remains within "
-          "seed noise of `kl`. The intermediate `kldrop-p025` is co-optimal "
-          "with `p015` and the image-only AUROC peak (0.668 on test_unseen); "
-          "it is omitted here for marker readability and is plotted in Fig 6. "
-          "The defense is branch-balancing, not signal-adding.")
+          "(0.632, dev only); dashed line = split-matched dedicated image-"
+          "only baseline (0.628 / 0.640 / 0.650 on dev / test_seen / "
+          "test_unseen). On `clean`, the text-only branch carries ~all the "
+          "signal (the image branch is dead at AUROC ≈ 0.59-0.60). KL alone "
+          "lifts image-only but stays uniformly below the split-matched "
+          "image baseline (Δ = −0.017 / −0.035 / −0.022). `kldrop-p015` and "
+          "`kldrop-p050` *redistribute* capacity: image-only AUROC reaches "
+          "or exceeds the dedicated image baseline on every split while "
+          "text-only AUROC remains within seed noise of `kl`. The "
+          "intermediate `kldrop-p025` is co-optimal with `p015` and the "
+          "image-only AUROC peak (0.668 on test_unseen, +0.018 above the "
+          "split-matched baseline); it is omitted here for marker readability "
+          "and is plotted in Fig 6. The defense is branch-balancing, not "
+          "signal-adding.")
 
 
 # =============================================================================
@@ -423,8 +457,8 @@ def fig_image_branch_revival_with_text_merged(modality_all):
     from matplotlib.lines import Line2D
     import numpy as np
 
-    baseline_img = 0.628
-    baseline_txt = 0.632
+    baseline_img = BASELINE_IMG_SPLIT_AVG  # mean(0.628, 0.640, 0.650) ≈ 0.639
+    baseline_txt = BASELINE_TXT_DEV
 
     def _per_split_mean(variant: str, branch: str, split: str) -> float | None:
         vals = []
@@ -485,11 +519,11 @@ def fig_image_branch_revival_with_text_merged(modality_all):
         Line2D([0], [0], marker="s", color="black", linestyle="", markersize=10,
                alpha=0.65, label="image-only AUROC"),
         Line2D([0], [0], color="black", linestyle="--", alpha=0.4, lw=1,
-               label=f"image-only baseline = {baseline_img:.3f}"),
+               label=f"image-only baseline (split-avg) = {baseline_img:.3f}"),
         Line2D([0], [0], marker="v", color="black", linestyle="", markersize=10,
                alpha=0.65, markerfacecolor="white", label="text-only AUROC"),
         Line2D([0], [0], color="black", linestyle=":", alpha=0.4, lw=1,
-               label=f"text-only baseline = {baseline_txt:.3f}"),
+               label=f"text-only baseline = {baseline_txt:.3f} (dev)"),
         Line2D([0], [0], marker="^", color="black", linestyle="", markersize=10,
                label="multimodal AUROC"),
     ]
@@ -504,19 +538,22 @@ def fig_image_branch_revival_with_text_merged(modality_all):
           "markers: multimodal (▲), image-only (■), text-only (open ▽), each "
           "averaged across (3 splits × 3 seeds). Error bar = σ of the three "
           "per-split means; uniformly ≤ 0.012 AUROC so the merge is "
-          "distortion-free. Dashed line = dedicated image-only baseline "
-          "(0.628); dotted line = dedicated text-only baseline (0.632). "
+          "distortion-free. Dashed line = split-averaged dedicated image-only "
+          f"baseline = {baseline_img:.3f} (= mean of split-matched dev / "
+          "test_seen / test_unseen baselines 0.628 / 0.640 / 0.650); dotted "
+          f"line = dedicated text-only baseline = {baseline_txt:.3f} (dev). "
           "Reads the branch-redistribution story in one panel: on `clean` "
           "the text branch carries the signal (text-only ≈ baseline; image-"
-          "only well below baseline). `kl` lifts image-only modestly. "
-          "`kldrop-p015` and `kldrop-p050` push image-only above the "
-          "dedicated baseline while text-only stays within seed noise of "
-          "`kl` — the defense rebalances capacity, it does not add signal. "
-          "The intermediate `kldrop-p025` is co-optimal with `p015` and the "
-          "image-only AUROC peak (0.668 on test_unseen); it is plotted in "
-          "Fig 6 only, to keep markers readable here. Use this in place of "
-          "poster Fig 2 when the augmented branch story is the framing; keep "
-          "3-panel Figs 2 / 2b for the report.")
+          "only well below baseline). `kl` lifts image-only modestly but "
+          "stays below the split-averaged image baseline. `kldrop-p015` and "
+          "`kldrop-p050` push image-only at or above the dedicated baseline "
+          "while text-only stays within seed noise of `kl` — the defense "
+          "rebalances capacity, it does not add signal. The intermediate "
+          "`kldrop-p025` is co-optimal with `p015` and the image-only AUROC "
+          "peak (0.668 on test_unseen, +0.018 above the split-matched "
+          "baseline); it is plotted in Fig 6 only, to keep markers readable "
+          "here. Use this in place of poster Fig 2 when the augmented branch "
+          "story is the framing; keep 3-panel Figs 2 / 2b for the report.")
 
 
 # =============================================================================
@@ -797,12 +834,13 @@ def fig_dropout_sweep(perturbed_all, modality_all):
     if not ps:
         plt.close(fig); return
 
+    baseline_img = BASELINE_IMG_BY_SPLIT[SWEEP_SPLIT]  # 0.650 on test_unseen
     ax1.errorbar(ps, clean_means, yerr=clean_stds, marker="s", capsize=4,
                  color="#1f77b4", label="clean (multimodal) AUROC")
     ax1.errorbar(ps, img_means, yerr=img_stds, marker="o", capsize=4,
                  color="#d62728", label="image-only AUROC")
-    ax1.axhline(0.628, ls=":", c="grey", alpha=0.7, lw=1.2,
-                label="dedicated image-only baseline (0.628)")
+    ax1.axhline(baseline_img, ls=":", c="grey", alpha=0.7, lw=1.2,
+                label=f"dedicated image-only baseline ({baseline_img:.3f})")
     ax1.set_xlabel("modality_dropout_text  p")
     ax1.set_ylabel("AUROC ↑")
 
@@ -816,14 +854,18 @@ def fig_dropout_sweep(perturbed_all, modality_all):
           "`modality_dropout_text` (p=0.00 is the `kl` recipe with no dropout; "
           "p=0.30 is the legacy `kldrop`, now Pareto-dominated). Both series "
           "share a single AUROC y-axis. Image-only AUROC (red ●) rises "
-          "monotonically with p and peaks at 0.668 at p=0.25 — well above the "
-          "dedicated image-only baseline of 0.628 (grey dotted). Clean "
-          "(multimodal) AUROC (blue ■) stays inside seed noise through "
-          "p ≤ 0.25 then drops by p = 0.30 — the 'first 25 % is free' window. "
-          "Hyperparameter `p` was selected on dev in Phase 9c; this figure is "
-          "the post-hoc visualisation of the same evaluation on the most "
-          "naturalistic held-out split. Shape reproduces on dev and test_seen "
-          "(see report appendix).")
+          "monotonically with p and peaks at 0.668 at p=0.25, +0.018 above "
+          f"the split-matched dedicated image-only baseline of {baseline_img:.3f} "
+          "(grey dotted, from `perturbed-baseline-image-test-unseen-seed0`). "
+          "At p=0 (`kl`, no dropout) image-only AUROC is 0.628 — 0.022 below "
+          "the dedicated baseline, confirming the image branch is under-"
+          "trained without modality dropout. Clean (multimodal) AUROC (blue "
+          "■) stays inside seed noise through p ≤ 0.25 then drops by p = "
+          "0.30 — the 'first 25 % is free' window. Hyperparameter `p` was "
+          "selected on dev in Phase 9c; this figure is the post-hoc "
+          "visualisation of the same evaluation on the most naturalistic "
+          "held-out split. Shape reproduces on dev and test_seen (see "
+          "report appendix).")
 
 
 # =============================================================================
@@ -834,17 +876,20 @@ def fig_dropout_sweep(perturbed_all, modality_all):
 def fig_combined_revival_and_sweep(modality_all, perturbed_all):
     """One-image side-by-side composition of Fig 2bm and Fig 6 for the poster.
 
-    Both panels share the AUROC y-axis so the dedicated image-only baseline
-    (0.628) reads as one continuous horizontal line across the figure — the
-    mechanism (left) and the dose-response sweep (right) get visually fused
-    into a single argument.
+    Both panels share the AUROC y-axis. The dedicated image-only baseline is
+    split-specific (0.628 / 0.640 / 0.650 on dev / test_seen / test_unseen);
+    the left panel draws the split-averaged value ≈ 0.639, the right panel
+    draws the test_unseen value 0.650. The two horizontal references differ
+    by ≈ 0.011 AUROC — small enough that the figure still reads as a unified
+    composition while remaining methodologically correct per panel.
     """
     plt = _plt()
     from matplotlib.lines import Line2D
     import numpy as np
 
-    baseline_img = 0.628
-    baseline_txt = 0.632
+    baseline_img_left = BASELINE_IMG_SPLIT_AVG       # ≈ 0.639 for split-averaged panel
+    baseline_img_right = BASELINE_IMG_BY_SPLIT["test_unseen"]  # 0.650
+    baseline_txt = BASELINE_TXT_DEV                  # 0.632 (dev only)
 
     # ---------- LEFT PANEL DATA: per-recipe split-averaged AUROC × 3 branches
     def _per_split_mean(variant: str, branch: str, split: str):
@@ -931,7 +976,7 @@ def fig_combined_revival_and_sweep(modality_all, perturbed_all):
         ax_L.errorbar(xi + offsets[2], to_m, yerr=to_s, color=color,
                       marker="v", markersize=9, capsize=3, linestyle="",
                       alpha=0.65, markerfacecolor="white")
-    ax_L.axhline(baseline_img, ls="--", c="black", alpha=0.45, lw=1)
+    ax_L.axhline(baseline_img_left, ls="--", c="black", alpha=0.45, lw=1)
     ax_L.axhline(baseline_txt, ls=":", c="black", alpha=0.45, lw=1)
     ax_L.set_xticks(x)
     ax_L.set_xticklabels(recipes_plotted, rotation=20, ha="right")
@@ -950,24 +995,25 @@ def fig_combined_revival_and_sweep(modality_all, perturbed_all):
         Line2D([0], [0], color="black", linestyle=":", alpha=0.45, lw=1,
                label=f"text-only baseline ({baseline_txt:.3f})"),
         Line2D([0], [0], color="black", linestyle="--", alpha=0.45, lw=1,
-               label=f"image-only baseline ({baseline_img:.3f})"),
+               label=f"image baseline ({baseline_img_left:.3f}, split-avg)"),
     ]
-    ax_L.legend(handles=left_legend, loc="upper center", fontsize=8,
-                framealpha=0.92, ncol=3, frameon=False,
-                bbox_to_anchor=(0.5, -0.13))
+    ax_L.legend(handles=left_legend, loc="upper left", fontsize=8,
+                framealpha=0.92, ncol=2, frameon=False,
+                bbox_to_anchor=(0.0, -0.13))
 
     # ---------- RIGHT PANEL: dropout-rate sweep
     ax_R.errorbar(ps, clean_means, yerr=clean_stds, marker="s", capsize=4,
                   color="#1f77b4", label="clean (multimodal) AUROC")
     ax_R.errorbar(ps, img_means, yerr=img_stds, marker="o", capsize=4,
                   color="#d62728", label="image-only AUROC")
-    ax_R.axhline(baseline_img, ls="--", c="black", alpha=0.45, lw=1)
+    ax_R.axhline(baseline_img_right, ls="--", c="black", alpha=0.45, lw=1,
+                 label=f"image baseline ({baseline_img_right:.3f})")
     ax_R.set_xticks(ps)
     ax_R.set_xlabel("modality_dropout_text  p")
     ax_R.set_title("(b) Dropout-rate sweep (test_unseen)",
                    fontsize=10)
-    ax_R.legend(loc="upper center", fontsize=8, framealpha=0.92,
-                ncol=2, frameon=False, bbox_to_anchor=(0.5, -0.13))
+    ax_R.legend(loc="upper right", fontsize=8, framealpha=0.92,
+                ncol=1, frameon=False, bbox_to_anchor=(1.0, -0.13))
 
     fig.suptitle("Image-branch revival: redistribution mechanism (a) "
                  "and dropout-rate dose-response (b)",
@@ -975,25 +1021,30 @@ def fig_combined_revival_and_sweep(modality_all, perturbed_all):
     fig.tight_layout(rect=(0, 0.05, 1, 0.95))
     _save(fig, "07_combined_revival_and_sweep",
           "Side-by-side merge of Fig 2bm and Fig 6 for the poster — one image, "
-          "two panels, shared AUROC y-axis so the dedicated image-only baseline "
-          "(0.628) reads as a single horizontal line spanning the figure. "
-          "(a) Per-recipe per-branch forward AUROC, averaged across 3 splits × "
-          "3 seeds (error bar = σ of the 3 per-split means; uniformly ≤ 0.012 "
-          "AUROC). `clean` carries signal only through text (text-only ≈ "
-          "baseline; image-only well below); `kl` lifts image-only modestly; "
-          "`kldrop-p015` and `kldrop-p050` push image-only above the dedicated "
-          "baseline while text-only stays within seed noise of `kl`. "
-          "(b) Modality-dropout-rate sweep on test_unseen (Phase 9c): 7 "
-          "points p ∈ {0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.50}. Image-only "
-          "AUROC (red ●) rises monotonically and peaks at 0.668 at p = 0.25 "
-          "— well above the dedicated image-only baseline of 0.628 (dashed). "
-          "Clean (multimodal) AUROC (blue ■) stays inside seed noise through "
-          "p ≤ 0.25 then drops by p = 0.30 — the 'first 25 % is free' window. "
-          "Hyperparameter `p` was chosen on dev in Phase 9c; (b) is the "
-          "post-hoc visualisation of the same evaluation on the most "
-          "naturalistic held-out split. Use this composite in place of "
-          "separate Fig 2bm + Fig 6 when poster real estate allows one wide "
-          "slot.")
+          "two panels, shared AUROC y-axis. Dedicated image-only baseline is "
+          "split-specific (0.628 / 0.640 / 0.650 on dev / test_seen / "
+          "test_unseen); (a) draws the split-averaged value ≈ 0.639, (b) "
+          "draws the test_unseen value 0.650 — the two dashed references "
+          "differ by ≈ 0.011 AUROC. (a) Per-recipe per-branch forward AUROC, "
+          "averaged across 3 splits × 3 seeds (error bar = σ of the 3 per-"
+          "split means; uniformly ≤ 0.012 AUROC). `clean` carries signal only "
+          "through text (text-only ≈ baseline; image-only well below); `kl` "
+          "lifts image-only modestly but remains below the split-averaged "
+          "image baseline; `kldrop-p015` and `kldrop-p050` push image-only "
+          "to or above the dedicated baseline while text-only stays within "
+          "seed noise of `kl`. (b) Modality-dropout-rate sweep on test_unseen "
+          "(Phase 9c): 7 points p ∈ {0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.50}. "
+          "Image-only AUROC (red ●) rises monotonically and peaks at 0.668 "
+          "at p = 0.25 — +0.018 above the split-matched dedicated image-only "
+          "baseline of 0.650 (dashed). At p = 0 (`kl`) image-only is 0.628, "
+          "−0.022 below the baseline — confirming the image branch is under-"
+          "trained without modality dropout. Clean (multimodal) AUROC (blue "
+          "■) stays inside seed noise through p ≤ 0.25 then drops by p = "
+          "0.30 — the 'first 25 % is free' window. Hyperparameter `p` was "
+          "chosen on dev in Phase 9c; (b) is the post-hoc visualisation of "
+          "the same evaluation on the most naturalistic held-out split. Use "
+          "this composite in place of separate Fig 2bm + Fig 6 when poster "
+          "real estate allows one wide slot.")
 
 
 # =============================================================================

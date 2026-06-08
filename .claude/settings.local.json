@@ -22,7 +22,23 @@
       "Bash(./cluster/cluster.sh pull-results *)",
       "Read(//usr/bin/**)",
       "Bash(PYTHONPATH=src .venv/bin/python3 scripts/aggregate_phase4.py)",
-      "Bash(PYTHONPATH=src .venv/bin/python3 scripts/failure_analysis.py)"
+      "Bash(PYTHONPATH=src .venv/bin/python3 scripts/failure_analysis.py)",
+      "WebSearch",
+      "WebFetch(domain:ai.meta.com)",
+      "WebFetch(domain:hatefulmemeschallenge.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.drivendata.org)",
+      "Bash(timeout 60 ./cluster/cluster.sh doctor)",
+      "Bash(timeout 30 ssh -o BatchMode=yes epfl-jumphost 'echo SSH_OK; id')",
+      "Bash(timeout 10 ssh-add ~/.ssh/epfl-ssh-key)",
+      "Bash(ssh-add -l)",
+      "Bash(timeout 30 ssh -o BatchMode=yes epfl-jumphost 'echo SSH_OK')",
+      "Bash(timeout 60 ssh epfl-jumphost 'echo \"===== IDENTITY =====\"; id; echo; echo \"===== /scratch/datasets/hate_meta \\(job-mount style path, if visible on jumphost\\) =====\"; ls -la /scratch/datasets/hate_meta 2>&1; echo; echo \"===== GROUP-49 SCRATCH dataset path \\(config.env\\) =====\"; ls -la /mnt/course-ee-559/rcp-caas-ee-559-g49/scratch-g49/datasets/hate_meta 2>&1')",
+      "Bash(grep -v -E '^\\\\s*[\\\\|_\\\\\\\\/ ]+$|HCP|____|\\\\|_\\\\|')",
+      "Bash(timeout 120 ssh epfl-jumphost ' *)",
+      "Bash(timeout 60 ssh epfl-jumphost ' *)",
+      "Bash(timeout 90 ssh epfl-jumphost ' *)",
+      "Bash(timeout 150 ssh epfl-jumphost ' *)"
     ]
   }
 }
