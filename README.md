@@ -44,7 +44,8 @@ Controls: **SPACE** = run inference / advance to next model · **← →** = swi
 
 The cached perturbed images and predictions ship with the repo, so **the default
 view needs neither a GPU, a model download, nor the dataset**. The small
-clean / naturalistic checkpoints live in `demo/checkpoints/`; the larger
+clean / naturalistic checkpoints live in `demo/checkpoints/` (the naturalistic
+demo checkpoint is KLDrop p=0.15, seed 1); the larger
 adversarial / combined checkpoints (a trained vision tower, ~339 MB each) exceed
 GitHub's file limit and are hosted as assets of the **`demo-checkpoints`**
 Release. Only `--live` / `--prepare` need them: they download automatically on
