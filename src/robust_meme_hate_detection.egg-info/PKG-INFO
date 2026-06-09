@@ -1,14 +1,13 @@
 Metadata-Version: 2.4
 Name: robust-meme-hate-detection
-Version: 0.1.0
-Summary: Adversarial robustness study for multimodal hateful meme detection.
+Version: 1.0.0
+Summary: Robustness of CLIP-fusion hateful-meme classifiers under naturalistic and adversarial perturbations (EE-559, Group 49).
 Requires-Python: >=3.10
 Requires-Dist: torch
 Requires-Dist: torchvision
+Requires-Dist: open_clip_torch>=2.24
 Requires-Dist: Pillow
 Requires-Dist: numpy
-Requires-Dist: pandas
 Requires-Dist: scikit-learn
-Requires-Dist: tqdm
-Requires-Dist: huggingface_hub
 Requires-Dist: PyYAML
+Requires-Dist: matplotlib
