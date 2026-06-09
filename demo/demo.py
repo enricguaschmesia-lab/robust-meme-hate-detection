@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import textwrap
 from pathlib import Path
 
 # The four models cycled through, in report order, with the cross-robustness
@@ -63,6 +65,7 @@ def ensure_checkpoint(name: str) -> Path:
         return path
     if name not in CHECKPOINT_URLS:
         raise FileNotFoundError(f"Missing checkpoint {path} and no download URL for {name!r}.")
+    import shutil
     import urllib.error
     import urllib.request
 
@@ -71,7 +74,13 @@ def ensure_checkpoint(name: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".pt.part")
     try:
-        urllib.request.urlretrieve(url, tmp)  # noqa: S310 (trusted Release URL)
+        headers = {}
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(request) as response, tmp.open("wb") as out:  # noqa: S310
+            shutil.copyfileobj(response, out)
     except (urllib.error.HTTPError, urllib.error.URLError) as exc:
         tmp.unlink(missing_ok=True)
         raise SystemExit(
@@ -105,7 +114,7 @@ def prepare(pgd_steps: int = 25) -> None:
     from robust_meme_hate_detection.attacks import pgd_image
     from robust_meme_hate_detection.data import ClipImageTransform, ClipTokenizer
     from robust_meme_hate_detection.model import load_classifier
-    from robust_meme_hate_detection.perturbations import ImagePerturbation, TextPerturbation
+    from robust_meme_hate_detection.perturbations import Compose, ImagePerturbation, TextPerturbation
     from robust_meme_hate_detection.seeding import seed_everything
 
     seed_everything(0)
@@ -114,15 +123,22 @@ def prepare(pgd_steps: int = 25) -> None:
     memes = _load_samples()
     (CACHE / "nat").mkdir(parents=True, exist_ok=True)
 
-    # --- Naturalistic view (model-independent): a realistic medium-severity edit
-    # (text edits dominate naturalistic degradation in the report). ---
+    # --- Naturalistic view (model-independent). ---
     nat_text: dict[str, str] = {}
     for m in memes:
         img = Image.open(SAMPLES / m["image"]).convert("RGB")
         seed = int(m["id"])
-        edited = ImagePerturbation.from_preset("compression", "medium", seed=seed)(img)
+        image_edit = Compose([
+            ImagePerturbation.from_preset("gaussian_noise", "high", seed=seed),
+            ImagePerturbation.from_preset("contrast_up", "high", seed=seed),
+        ])
+        text_edit = Compose([
+            TextPerturbation.from_preset("leetspeak", "medium", seed=seed),
+            TextPerturbation.from_preset("char_deletion", "medium", seed=seed),
+        ])
+        edited = image_edit(img)
         edited.save(CACHE / "nat" / f"{m['id']}.png")
-        nat_text[m["id"]] = TextPerturbation.from_preset("leetspeak", "medium", seed=seed)(m["text"])
+        nat_text[m["id"]] = text_edit(m["text"])
     (CACHE / "nat_text.json").write_text(json.dumps(nat_text, indent=2))
 
     # --- Per-model adversarial views + predictions on all three views. ---
@@ -202,7 +218,7 @@ def _predict_live(model_name: str, memes: list[dict]) -> dict[str, dict]:
 
 
 class DemoBoard:
-    """A matplotlib board: rows = 10 memes, columns = clean / nat / adv."""
+    """A matplotlib board: rows = clean / nat / adv, columns = 10 memes."""
 
     def __init__(self, memes, all_preds, *, live: bool):
         import matplotlib.pyplot as plt
@@ -212,13 +228,14 @@ class DemoBoard:
         self.Image = Image
         self.memes = memes
         self.all_preds = all_preds
+        self.nat_text = json.loads((CACHE / "nat_text.json").read_text())
         self.live = live
         self.model_idx = 0
         self.revealed = False
 
         n = len(memes)
-        self.fig, self.axes = plt.subplots(n, 3, figsize=(8.2, 1.15 * n + 0.8))
-        self.fig.subplots_adjust(left=0.16, right=0.99, top=0.93, bottom=0.02, hspace=0.05, wspace=0.05)
+        self.fig, self.axes = plt.subplots(3, n, figsize=(2.7 * n, 8.0))
+        self.fig.subplots_adjust(left=0.075, right=0.995, top=0.88, bottom=0.11, hspace=0.35, wspace=0.08)
         self.fig.canvas.mpl_connect("key_press_event", self._on_key)
         self._draw()
 
@@ -234,18 +251,21 @@ class DemoBoard:
     def _draw(self):
         name, title, blurb = MODELS[self.model_idx]
         preds = self._preds_for_current() if self.revealed else None
-        for r, m in enumerate(self.memes):
-            for c, (view, view_label) in enumerate(VIEWS):
+        for c, m in enumerate(self.memes):
+            for r, (view, view_label) in enumerate(VIEWS):
                 ax = self.axes[r][c]
                 ax.clear()
                 ax.imshow(self.Image.open(_view_image_path(name, view, m["id"])).convert("RGB"))
                 ax.set_xticks([])
                 ax.set_yticks([])
                 if r == 0:
-                    ax.set_title(view_label, fontsize=10, fontweight="bold")
+                    ax.set_title(f"#{m['id']} [{label_str(m['label'])}]", fontsize=9, fontweight="bold")
                 if c == 0:
-                    ax.set_ylabel(f"#{m['id']}\n[{label_str(m['label'])}]", fontsize=7, rotation=0,
-                                  ha="right", va="center", labelpad=22)
+                    ax.set_ylabel(view_label, fontsize=10, fontweight="bold", rotation=0,
+                                  ha="right", va="center", labelpad=42)
+                caption = self.nat_text[m["id"]] if view == "nat" else m["text"]
+                ax.text(0.5, -0.08, textwrap.fill(caption, width=28),
+                        transform=ax.transAxes, ha="center", va="top", fontsize=6.7)
                 if preds is not None:
                     p = preds[m["id"]][view]
                     pred = 1 if p >= THRESHOLD else 0
