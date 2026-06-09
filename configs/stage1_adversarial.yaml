@@ -11,7 +11,7 @@ model:
 
 data:
   # Path visible from the environment where you run training (jumphost or cluster).
-  dataset_root: /scratch/datasets/hate_meta
+  dataset_root: /scratch/datasets/MAMI_prepared
   # Optional: path to a JSON split file to restrict the training set.
   # train_split_file: /path/to/train_split.json
   val_split: dev
@@ -19,7 +19,7 @@ data:
 
 train:
   batch_size: 64
-  epochs: 100
+  epochs: 12
   lr_head: 1.0e-4
   lr_vis: 1.0e-6
   weight_decay: 1.0e-2
@@ -28,7 +28,7 @@ train:
   early_stop_patience: 100
   early_stop_metric: macro_f1
   pos_weight_auto: true
-  adv_training_type: trades
+  adv_training_type: regular
   alpha: 0.6
 
 robust:
