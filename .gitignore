@@ -1,53 +1,43 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
-htmlcov/
+*.egg-info/
 
 # Virtual environments
 .venv/
 venv/
 env/
 
-# Project data and generated artifacts
-data/raw/*
-data/processed/*
-data/external/*
-experiments/*
-reports/generated/*
-*.ckpt
+# Harness / editor / OS
+.claude/
+.vscode/
+.idea/
+.DS_Store
+
+# Training outputs / retained build inputs (not part of the delivery)
+runs/
+demo/out/
+cluster-checkpoints/
+cluster-results/
+
+# Datasets are not redistributed: drop the Hateful Memes files under data/
+# (see data/README.md). Everything under data/ is ignored except the committed
+# deterministic train split.
+data/**
+!data/README.md
+!data/processed/
+!data/processed/splits/
+!data/processed/splits/train_split.json
+
+# Model weights are ignored by default. The two small (~4 MB) frozen-encoder
+# demo checkpoints ship in-repo; the large adversarial / combined ones exceed
+# GitHub's 100 MB limit and are fetched from a Release on first --live/--prepare.
 *.pt
 *.pth
 *.safetensors
-
-# Pulled cluster artifacts — exclude image payloads (perturbation PNGs etc.).
-# Keep small metadata (manifest.csv, summary.json, metrics.json, pairs.csv).
-cluster-results/**/*.png
-cluster-results/**/*.jpg
-cluster-results/**/*.jpeg
-cluster-results/**/*.gif
-cluster-results/**/*.bmp
-cluster-results/**/*.webp
-cluster-checkpoints/
-
-# Keep directory placeholders
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-!data/external/.gitkeep
-!experiments/.gitkeep
-
-# Local secrets/config
-.env
-cluster/config.env
-/cluster_access_tutorial/
-
-# OS/editor
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
+!demo/checkpoints/clean.pt
+!demo/checkpoints/naturalistic.pt

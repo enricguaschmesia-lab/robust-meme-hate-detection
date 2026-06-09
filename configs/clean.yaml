@@ -1,0 +1,27 @@
+# Clean multimodal baseline: frozen CLIP encoders, train the fusion head with
+# BCE only. This is the model the report audits (Table: clean baselines).
+seed: 0
+
+model:
+  arch: ViT-B-32
+  pretrained: laion2b_s34b_b79k
+  freeze_encoders: true
+  modality: multimodal          # multimodal | image | text
+  head_hidden: 512
+  head_dropout: 0.2
+
+data:
+  # Point this at a directory holding {train,dev,test_seen,test_unseen}.jsonl + images.
+  dataset_root: data/hateful_memes
+  train_split_file: data/processed/splits/train_split.json
+  val_split: dev
+  num_workers: 8
+
+train:
+  batch_size: 128
+  epochs: 10
+  lr_head: 1.0e-3
+  weight_decay: 1.0e-2
+  warmup_ratio: 0.1
+  early_stop_patience: 3
+  pos_weight_auto: true
