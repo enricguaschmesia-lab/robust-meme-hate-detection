@@ -1,0 +1,52 @@
+{
+  "config_path": "configs/robust_both_frozen.yaml",
+  "seed": 0,
+  "modality": "multimodal",
+  "device": "cuda",
+  "pos_weight": 1.7864855451062347,
+  "n_train": 8000,
+  "n_val": 500,
+  "trainable_params": 1053697,
+  "total_params": 152331010,
+  "amp_dtype": "bfloat16",
+  "select_metric": "mean_macro_f1",
+  "robust": {
+    "clean_weight": 1.0,
+    "naturalistic": {
+      "enabled": true,
+      "alpha": 1.0,
+      "beta": 0.5,
+      "gamma": 0.25,
+      "modality_dropout_text": 0.3,
+      "modality_dropout_image": 0.0
+    },
+    "adversarial": {
+      "enabled": true,
+      "weight_bce": 1.0,
+      "weight_kl": 0.0,
+      "epsilon_over_255": 8,
+      "pgd_steps": 10,
+      "pgd_alpha_frac": 0.25,
+      "norm": "linf"
+    }
+  },
+  "val_accuracy": 0.642,
+  "val_macro_f1": 0.633303424003671,
+  "val_auroc": 0.728896,
+  "val_precision": 0.7052023121387283,
+  "val_recall": 0.488,
+  "val_fpr": 0.204,
+  "val_fnr": 0.512,
+  "adv_val_accuracy": 0.556,
+  "adv_val_macro_f1": 0.5536863098301595,
+  "adv_val_auroc": 0.587248,
+  "adv_val_precision": 0.5654205607476636,
+  "adv_val_recall": 0.484,
+  "adv_val_fpr": 0.372,
+  "adv_val_fnr": 0.516,
+  "best_epoch": 0,
+  "select_score": 0.5934948669169153,
+  "train_loss_at_best": 1.986014546886567,
+  "epochs_run": 4,
+  "elapsed_seconds": 1038.196778535843
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "15740",
+    "label": 1,
+    "clean_prob": 0.09138210862874985,
+    "attacked_prob": 0.09138210862874985,
+    "clean_path": "00_15740_clean.png",
+    "adv_path": "00_15740_adv.png",
+    "pair_path": "00_15740_pair.png"
+  },
+  {
+    "id": "38794",
+    "label": 1,
+    "clean_prob": 0.8244618773460388,
+    "attacked_prob": 0.8244618773460388,
+    "clean_path": "01_38794_clean.png",
+    "adv_path": "01_38794_adv.png",
+    "pair_path": "01_38794_pair.png"
+  },
+  {
+    "id": "60792",
+    "label": 1,
+    "clean_prob": 0.4996929168701172,
+    "attacked_prob": 0.4995898902416229,
+    "clean_path": "02_60792_clean.png",
+    "adv_path": "02_60792_adv.png",
+    "pair_path": "02_60792_pair.png"
+  },
+  {
+    "id": "71824",
+    "label": 1,
+    "clean_prob": 0.17328819632530212,
+    "attacked_prob": 0.17328819632530212,
+    "clean_path": "03_71824_clean.png",
+    "adv_path": "03_71824_adv.png",
+    "pair_path": "03_71824_pair.png"
+  }
+]
