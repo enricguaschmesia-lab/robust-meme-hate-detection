@@ -57,7 +57,29 @@ wrong label by PGD, while **adversarial** and **combined** resist it — and the
 naturalistic / combined models survive the naturalistic edit that fools the clean
 baseline. (Demo PGD uses 10 steps for speed; the report uses 25.)
 
-### 2. Train a model
+### 2. Getting the data
+Since the datasets are too huge to be submitted or hosted on GitHub, we did not include them. This section will outline how to proceed. For the Meta Hate Dataset (raw from https://www.kaggle.com/datasets/parthplc/facebook-hateful-meme-dataset), no preprocessing is needed, as it is already in the required shape. <br>
+For MAMI (raw download from https://drive.google.com/file/d/169qe9n4EbNlVbzFWNMjVX3N74Hh5Jcqr/view), please run 
+
+```bash
+python -m robust_meme_hate_detection.preprocessing.prepare_mami \
+    --raw-dir "data/raw/MAMI DATASET" \
+    --out-dir data/mami \
+    --copy \
+    --missing-ok
+```
+For the MultiOFF dataset (raw download from https://drive.google.com/drive/folders/1hKLOtpVmF45IoBmJPwojgq6XraLtHmV6), please run 
+
+```bash
+python -m robust_meme_hate_detection.preprocessing.prepare_multioff \
+    --raw-dir data/raw/MultiOFF_Dataset \
+    --out-dir data/multioff \
+    --copy \
+    --missing-ok
+```
+If you want to train/evaluate on them, please adapt the corresponding paths in the config files.
+
+### 3. Train a model
 
 One config-driven entry point covers every recipe (the `robust:` block selects
 the regime). Set `data.dataset_root` in the config to your Hateful Memes
@@ -75,7 +97,7 @@ python train.py --config configs/text_only.yaml    --seed 0 --out runs/text_only
 
 Runs on GPU if available, else CPU. Writes `<out>/best.pt` and `<out>/metrics.json`.
 
-### 3. Evaluate a checkpoint
+### 4. Evaluate a checkpoint
 
 One entry point with four suites, each mapping to a result in the report:
 
