@@ -63,13 +63,26 @@ def ensure_checkpoint(name: str) -> Path:
         return path
     if name not in CHECKPOINT_URLS:
         raise FileNotFoundError(f"Missing checkpoint {path} and no download URL for {name!r}.")
+    import urllib.error
     import urllib.request
 
     url = CHECKPOINT_URLS[name]
     print(f"[download] {name}.pt (~339 MB) from {url} ...", flush=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".pt.part")
-    urllib.request.urlretrieve(url, tmp)  # noqa: S310 (trusted Release URL)
+    try:
+        urllib.request.urlretrieve(url, tmp)  # noqa: S310 (trusted Release URL)
+    except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+        tmp.unlink(missing_ok=True)
+        raise SystemExit(
+            f"\nCould not download {name}.pt automatically ({exc}).\n"
+            f"This happens if the GitHub repository is private or you are offline.\n"
+            f"Download it manually from the 'demo-checkpoints' release and place it at:\n"
+            f"    {path}\n"
+            f"URL: {url}\n"
+            f"(The default demo -- `python demo/demo.py` -- needs no checkpoints; only "
+            f"--live / --prepare do.)"
+        ) from exc
     tmp.rename(path)
     print(f"[download] saved {path}", flush=True)
     return path

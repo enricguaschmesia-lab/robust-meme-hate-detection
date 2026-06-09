@@ -42,8 +42,11 @@ The cached perturbed images and predictions ship with the repo, so **the default
 view needs neither a GPU, a model download, nor the dataset**. The small
 clean / naturalistic checkpoints live in `demo/checkpoints/`; the larger
 adversarial / combined checkpoints (a trained vision tower, ~339 MB each) exceed
-GitHub's file limit and are hosted as Release assets — `--live` / `--prepare`
-download them automatically on first use (as does the OpenCLIP base weight).
+GitHub's file limit and are hosted as assets of the **`demo-checkpoints`**
+Release. Only `--live` / `--prepare` need them: they download automatically on
+first use (as does the OpenCLIP base weight). If automatic download fails (e.g.
+the repository is private), download `adversarial.pt` and `combined.pt` from the
+release page and drop them into `demo/checkpoints/`.
 
 What to look for: the **clean** and **naturalistic** models are flipped to the
 wrong label by PGD, while **adversarial** and **combined** resist it — and the
