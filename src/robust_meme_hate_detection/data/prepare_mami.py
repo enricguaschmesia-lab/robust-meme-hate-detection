@@ -119,10 +119,11 @@ def convert_split(
             dst = img_out_dir / file_name
             if not src.exists():
                 if missing_ok:
-                    print(f"  [WARN] missing image: {src}")
+                    print(f"  [WARN] missing image, skipping record: {src}")
+                    continue
                 else:
                     raise FileNotFoundError(f"Image not found: {src}")
-            elif not dst.exists():
+            if not dst.exists():
                 if copy:
                     shutil.copy2(src, dst)
                 else:

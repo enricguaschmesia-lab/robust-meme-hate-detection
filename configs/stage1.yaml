@@ -9,7 +9,7 @@ model:
 
 data:
   dataset_root: /scratch/datasets/hate_meta
-  train_split_file: data/processed/splits/train_split.json
+  #train_split_file: data/processed/splits/train_split.json
   val_split: dev
   num_workers: 8
 

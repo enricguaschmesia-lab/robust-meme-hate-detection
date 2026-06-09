@@ -10,7 +10,7 @@ set -euo pipefail
 
 # ---------------- EDIT ME --------------------------------------------------
 
-JOB="${JOB:-whitebox-with-balanced-adversarial-$(date +%Y%m%d-%H%M%S)}"
+JOB="${JOB:-whitebox-eval-meta}"
 IMAGE="${IMAGE:-registry.rcp.epfl.ch/ee-559-guasch/robust-meme-hate-detection:v0.2}"
 USER_UID="${USER_UID:-$(id -u 2>/dev/null || echo 0)}"
 
@@ -28,7 +28,8 @@ SHARED_RW_PVC="${SHARED_RW_PVC:-course-ee-559-shared-rw}"
 
 CKPT="${CKPT:-/scratch/robust-meme-hate-detection/experiments/adversarial-balanced-stage1-seed0-20260520-161106/ckpt/best.pt}"
 # CKPT="${CKPT:-/scratch/robust-meme-hate-detection/experiments/stage1-seed0-20260520-111021/ckpt/best.pt}"
-# CKPT="${CKPT:-/scratch/robust-meme-hate-detection/experiments/adversarial-baseline-stage1-seed0-20260520-144814/ckpt/best.pt}"
+# CKPT="${CKPT:-/scratch/robust-meme-hate-detection/experiments/adversarial-balanced-mami-meta-20260608-154308/ckpt/best.pt}"
+# CKPT="${CKPT:-/scratch/robust-meme-hate-detection/experiments/train-robust-kldrop-p025-seed1/ckpt/best.pt}"
 CONFIG="${CONFIG:-$REPO_DIR/configs/stage1.yaml}"
 OUT_DIR="${OUT_DIR:-$JOB_RESULTS_ROOT/$JOB}"
 
@@ -36,7 +37,7 @@ MODALITY="${MODALITY:-multimodal}"
 ATTACKS="${ATTACKS:-fgsm,pgd}"
 EPSILONS="${EPSILONS:-1,2,4,8}"
 MAX_EPSILON="${MAX_EPSILON:-0}"
-PGD_STEPS="${PGD_STEPS:-100}"
+PGD_STEPS="${PGD_STEPS:-25}"
 PGD_ALPHA_FRAC="${PGD_ALPHA_FRAC:-0.25}"
 SAMPLE_LIMIT="${SAMPLE_LIMIT:-4}"
 MAX_BATCHES="${MAX_BATCHES:-0}"

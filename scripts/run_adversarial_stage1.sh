@@ -10,7 +10,7 @@ set -euo pipefail
 
 # ---------------- EDIT ME --------------------------------------------------
 
-JOB="${JOB:-adversarial-balanced-trades-$(date +%Y%m%d-%H%M%S)}"
+JOB="${JOB:-adversarial-balanced-mami-meta-$(date +%Y%m%d-%H%M%S)}"
 IMAGE="${IMAGE:-registry.rcp.epfl.ch/ee-559-guasch/robust-meme-hate-detection:v0.2}"
 USER_UID="316497"
 
@@ -26,7 +26,7 @@ JOB_RESULTS_ROOT="${JOB_RESULTS_ROOT:-/scratch/robust-meme-hate-detection/experi
 SHARED_RO_PVC="${SHARED_RO_PVC:-course-ee-559-shared-ro}"
 SHARED_RW_PVC="${SHARED_RW_PVC:-course-ee-559-shared-rw}"
 
-CKPT="${CKPT:-/scratch/robust-meme-hate-detection/experiments/stage1-seed0-20260520-111021/ckpt/best.pt}"
+CKPT="${CKPT:-/scratch/robust-meme-hate-detection/experiments/adversarial-balanced-stage1-seed0-20260520-201241/ckpt/best.pt}"
 CONFIG="${CONFIG:-$REPO_DIR/configs/stage1_adversarial.yaml}"
 OUT_DIR="${OUT_DIR:-$JOB_RESULTS_ROOT/$JOB}"
 

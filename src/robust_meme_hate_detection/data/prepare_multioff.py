@@ -75,13 +75,14 @@ def convert_split(
                 missing.append(image_name)
                 if not missing_ok:
                     raise FileNotFoundError(f"Image not found: {src}")
-            elif not dst.exists():
+                print(f"  [WARN] missing image, skipping record: {image_name}")
+                continue
+            if not dst.exists():
                 if copy:
                     shutil.copy2(src, dst)
                 else:
                     dst.symlink_to(src.resolve())
 
-            # Use the stem (filename without extension) as the id
             record_id = Path(image_name).stem
             records.append({
                 "id": record_id,

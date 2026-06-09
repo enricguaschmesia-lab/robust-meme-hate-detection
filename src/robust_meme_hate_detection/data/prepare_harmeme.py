@@ -137,8 +137,9 @@ def convert_split(
         src_img = image_index.get(image_name)
         if src_img is None:
             if missing_ok:
-                print(f"  [WARN] image not found in index: {image_name!r}")
+                print(f"  [WARN] image not found in index, skipping record: {image_name!r}")
                 n_missing += 1
+                continue
             else:
                 raise FileNotFoundError(
                     f"Image '{image_name}' not found under HarMeme_Images/. "
@@ -146,7 +147,7 @@ def convert_split(
                 )
 
         dst_img = img_out_dir / image_name
-        if src_img is not None and not dst_img.exists():
+        if not dst_img.exists():
             if copy:
                 shutil.copy2(src_img, dst_img)
             else:
