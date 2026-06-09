@@ -21,6 +21,11 @@ REPO = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO / "project_planning" / "poster_figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Report-tuned variants of two figures (no titles, brief axis labels, much
+# larger fonts) are written straight into the report's figures dir under the
+# names the report \includegraphics expects.
+REPORT_FIG_DIR = REPO / "project_planning" / "EE_559__Group_Mini_Project_Template" / "figures"
+
 # Import aggregator as a module (so we reuse _load_*, _is_robust_key, etc.)
 _spec = importlib.util.spec_from_file_location("agg", REPO / "scripts" / "aggregate_phase4.py")
 agg = importlib.util.module_from_spec(_spec)
@@ -98,6 +103,16 @@ def _save(fig, name: str, caption: str) -> None:
     (OUT_DIR / f"{name}.caption.txt").write_text(caption.strip() + "\n", encoding="utf-8")
     plt.close(fig)
     print(f"  wrote {png.relative_to(REPO)} + {pdf.name} + {svg.name} + caption")
+
+
+def _save_report_pdf(fig, name: str) -> None:
+    """Save a single report-tuned PDF straight into the report figures dir."""
+    import matplotlib.pyplot as plt
+    REPORT_FIG_DIR.mkdir(parents=True, exist_ok=True)
+    pdf = REPORT_FIG_DIR / f"{name}.pdf"
+    fig.savefig(pdf)
+    plt.close(fig)
+    print(f"  wrote {pdf.relative_to(REPO)}")
 
 
 # ---------------------------------------------------------------- helpers
@@ -629,9 +644,15 @@ def fig_composite_escalation(perturbed_all, split: str = "test_unseen"):
 # Figure 4 — Class-asymmetric trade-off (kldrop wins vs kl wins, by label)
 # =============================================================================
 
-def fig_class_asymmetric():
+def fig_class_asymmetric(report: bool = False):
     plt = _plt()
     from collections import Counter
+
+    # Report variant: no title, brief axis label, much larger fonts (the figure
+    # is shrunk to one column width, ~0.38x, so source fonts must be large).
+    FS_LABEL, FS_YTICK, FS_ANNOT, FS_N, FS_LEG = (
+        (18, 15, 17, 13, 15) if report else (10, 10, 12, 10, 9)
+    )
 
     # Test_unseen-only single-panel version for the poster (n=2000, the
     # largest split and the strongest asymmetry: 97 % label-0 on kldrop-p015's
@@ -661,8 +682,8 @@ def fig_class_asymmetric():
     y_top, y_bot = 1, 0
 
     # Top row: kldrop-p015 corrects vs kl  (mostly label=0)
-    ax.barh(y_top, a0, bar_h, color="#1f77b4", label="label=0 (non-hate)")
-    ax.barh(y_top, a1, bar_h, left=a0, color="#d62728", label="label=1 (hate)")
+    ax.barh(y_top, a0, bar_h, color="#1f77b4", label="non-hate")
+    ax.barh(y_top, a1, bar_h, left=a0, color="#d62728", label="hate")
     # Bottom row: kl corrects vs kldrop-p015  (mostly label=1)
     ax.barh(y_bot, b0, bar_h, color="#1f77b4")
     ax.barh(y_bot, b1, bar_h, left=b0, color="#d62728")
@@ -671,35 +692,44 @@ def fig_class_asymmetric():
     if tot_a:
         ax.text(a0 / 2, y_top, f"{100 * a0 / tot_a:.0f}% non-hate",
                 ha="center", va="center", color="white",
-                fontsize=12, fontweight="bold")
+                fontsize=FS_ANNOT, fontweight="bold")
     if tot_b:
         ax.text(b0 + b1 / 2, y_bot, f"{100 * b1 / tot_b:.0f}% hate",
                 ha="center", va="center", color="white",
-                fontsize=12, fontweight="bold")
+                fontsize=FS_ANNOT, fontweight="bold")
 
     # Total-n labels at the right end of each bar
     xpad = max(tot_a, tot_b) * 0.02
-    ax.text(tot_a + xpad, y_top, f"n = {tot_a}", va="center", fontsize=10)
-    ax.text(tot_b + xpad, y_bot, f"n = {tot_b}", va="center", fontsize=10)
+    ax.text(tot_a + xpad, y_top, f"n = {tot_a}", va="center", fontsize=FS_N)
+    ax.text(tot_b + xpad, y_bot, f"n = {tot_b}", va="center", fontsize=FS_N)
 
     ax.set_yticks([y_top, y_bot])
     ax.set_yticklabels(
         [f"`{pair_a}` corrects\n(vs `{pair_b}`)",
-         f"`{pair_b}` corrects\n(vs `{pair_a}`)"], fontsize=10)
-    ax.set_xlabel("Number of disagreement examples on test_unseen "
-                  "(n=2000, 3-seed majority bucket)")
+         f"`{pair_b}` corrects\n(vs `{pair_a}`)"], fontsize=FS_YTICK)
+    ax.set_xlabel("Disagreement examples (n=2000)" if report else
+                  "Number of disagreement examples on test_unseen "
+                  "(n=2000, 3-seed majority bucket)", fontsize=FS_LABEL)
+    ax.tick_params(axis="x", labelsize=FS_YTICK)
     ax.set_xlim(0, max(tot_a, tot_b) * 1.12)
     ax.set_ylim(-0.6, 1.6)
     ax.grid(axis="x", alpha=0.25)
     ax.grid(axis="y", visible=False)
-    ax.set_title(
-        f"`{pair_a}` corrections target false positives — "
-        f"{100 * a0 / tot_a:.0f}% non-hate (95 % CI [94, 99], n={tot_a}); "
-        f"`{pair_b}` corrections target false negatives ({100 * b1 / tot_b:.0f}% hate, n={tot_b})",
-        fontsize=10)
-    ax.legend(loc="lower right", fontsize=9, framealpha=0.92)
+    if not report:
+        ax.set_title(
+            f"`{pair_a}` corrections target false positives — "
+            f"{100 * a0 / tot_a:.0f}% non-hate (95 % CI [94, 99], n={tot_a}); "
+            f"`{pair_b}` corrections target false negatives ({100 * b1 / tot_b:.0f}% hate, n={tot_b})",
+            fontsize=10)
+    # Single-row legend in the empty band between the two bars: clears the
+    # bottom bar (the old lower-right overlap) and the poster title at the top.
+    ax.legend(loc="center right", ncol=2, fontsize=FS_LEG, framealpha=0.92,
+              columnspacing=1.0, handletextpad=0.5)
     fig.tight_layout()
 
+    if report:
+        _save_report_pdf(fig, "class_asymmetric")
+        return
     _save(fig, "04_class_asymmetric_tradeoff",
           f"Per-example disagreements between `{pair_a}` and `{pair_b}` on "
           "test_unseen (n=2000, 3-seed majority bucket). Two horizontal "
@@ -873,7 +903,7 @@ def fig_dropout_sweep(perturbed_all, modality_all):
 #            Side-by-side single image for the poster (shared AUROC y-axis).
 # =============================================================================
 
-def fig_combined_revival_and_sweep(modality_all, perturbed_all):
+def fig_combined_revival_and_sweep(modality_all, perturbed_all, report: bool = False):
     """One-image side-by-side composition of Fig 2bm and Fig 6 for the poster.
 
     Both panels share the AUROC y-axis. The dedicated image-only baseline is
@@ -886,6 +916,15 @@ def fig_combined_revival_and_sweep(modality_all, perturbed_all):
     plt = _plt()
     from matplotlib.lines import Line2D
     import numpy as np
+
+    # Report variant: no suptitle/panel subtitles, brief axis labels, much
+    # larger fonts (this two-panel figure is shrunk to ~0.27x at one column
+    # width, so source fonts must be very large) and bigger markers.
+    FS_LABEL, FS_TICK, FS_LEG, FS_PANEL = (
+        (22, 19, 17, 21) if report else (10, 10, 8, 10)
+    )
+    MS = 11 if report else 9
+    CAPS = 4 if report else 3
 
     baseline_img_left = BASELINE_IMG_SPLIT_AVG       # ≈ 0.639 for split-averaged panel
     baseline_img_right = BASELINE_IMG_BY_SPLIT["test_unseen"]  # 0.650
@@ -958,7 +997,7 @@ def fig_combined_revival_and_sweep(modality_all, perturbed_all):
 
     # ---------- FIGURE
     fig, (ax_L, ax_R) = plt.subplots(
-        1, 2, figsize=(12.0, 5.9), sharey=True,
+        1, 2, figsize=(10.0, 4.8) if report else (12.0, 5.9), sharey=True,
         gridspec_kw={"wspace": 0.06, "width_ratios": [1.05, 1.0]},
     )
 
@@ -969,56 +1008,90 @@ def fig_combined_revival_and_sweep(modality_all, perturbed_all):
             x, recipes_plotted, mm, io, to):
         color = RECIPE_COLOR.get(recipe, "k")
         ax_L.errorbar(xi + offsets[0], mm_m, yerr=mm_s, color=color,
-                      marker="^", markersize=9, capsize=3, linestyle="")
+                      marker="^", markersize=MS, capsize=CAPS, linestyle="")
         ax_L.errorbar(xi + offsets[1], io_m, yerr=io_s, color=color,
-                      marker="s", markersize=9, capsize=3, linestyle="",
+                      marker="s", markersize=MS, capsize=CAPS, linestyle="",
                       alpha=0.65)
         ax_L.errorbar(xi + offsets[2], to_m, yerr=to_s, color=color,
-                      marker="v", markersize=9, capsize=3, linestyle="",
+                      marker="v", markersize=MS, capsize=CAPS, linestyle="",
                       alpha=0.65, markerfacecolor="white")
     ax_L.axhline(baseline_img_left, ls="--", c="black", alpha=0.45, lw=1)
     ax_L.axhline(baseline_txt, ls=":", c="black", alpha=0.45, lw=1)
     ax_L.set_xticks(x)
-    ax_L.set_xticklabels(recipes_plotted, rotation=20, ha="right")
-    ax_L.set_ylabel("AUROC")
-    ax_L.set_ylim(0.575, 0.770)
-    ax_L.set_title("(a) Per-branch AUROC, split-averaged",
-                   fontsize=10)
+    ax_L.set_xticklabels(recipes_plotted, rotation=20, ha="right",
+                         fontsize=FS_TICK)
+    ax_L.set_ylabel("AUROC", fontsize=FS_LABEL)
+    ax_L.set_ylim(0.575, 0.800)
+    ax_L.tick_params(axis="y", labelsize=FS_TICK)
+    if report:
+        # Panel tag in the empty bottom-right corner so the top band is free for
+        # the single-row legend.
+        ax_L.text(0.98, 0.03, "(a)", transform=ax_L.transAxes, va="bottom",
+                  ha="right", fontsize=FS_PANEL, fontweight="bold")
+    else:
+        ax_L.set_title("(a) Per-branch AUROC, split-averaged", fontsize=10)
 
     left_legend = [
-        Line2D([0], [0], marker="^", color="black", linestyle="", markersize=9,
+        Line2D([0], [0], marker="^", color="black", linestyle="", markersize=MS,
                label="multimodal"),
-        Line2D([0], [0], marker="s", color="black", linestyle="", markersize=9,
+        Line2D([0], [0], marker="s", color="black", linestyle="", markersize=MS,
                alpha=0.65, label="image-only"),
-        Line2D([0], [0], marker="v", color="black", linestyle="", markersize=9,
+        Line2D([0], [0], marker="v", color="black", linestyle="", markersize=MS,
                alpha=0.65, markerfacecolor="white", label="text-only"),
-        Line2D([0], [0], color="black", linestyle=":", alpha=0.45, lw=1,
-               label=f"text-only baseline ({baseline_txt:.3f})"),
-        Line2D([0], [0], color="black", linestyle="--", alpha=0.45, lw=1,
-               label=f"image baseline ({baseline_img_left:.3f}, split-avg)"),
     ]
-    ax_L.legend(handles=left_legend, loc="upper left", fontsize=8,
-                framealpha=0.92, ncol=2, frameon=False,
-                bbox_to_anchor=(0.0, -0.13))
+    if not report:
+        left_legend += [
+            Line2D([0], [0], color="black", linestyle=":", alpha=0.45, lw=1,
+                   label=f"text-only baseline ({baseline_txt:.3f})"),
+            Line2D([0], [0], color="black", linestyle="--", alpha=0.45, lw=1,
+                   label=f"image baseline ({baseline_img_left:.3f}, split-avg)"),
+        ]
+    if report:
+        # Inside the empty top band, single horizontal row -> reclaims the
+        # vertical space the old above-panel stacked legend consumed.
+        ax_L.legend(handles=left_legend, loc="upper center", ncol=2,
+                    frameon=False, fontsize=FS_LEG,
+                    columnspacing=1.4, handletextpad=0.3, borderaxespad=0.3)
+    else:
+        ax_L.legend(handles=left_legend, loc="upper left",
+                    bbox_to_anchor=(0.0, -0.13), ncol=2, frameon=False,
+                    fontsize=FS_LEG, framealpha=0.92)
 
     # ---------- RIGHT PANEL: dropout-rate sweep
-    ax_R.errorbar(ps, clean_means, yerr=clean_stds, marker="s", capsize=4,
-                  color="#1f77b4", label="clean (multimodal) AUROC")
-    ax_R.errorbar(ps, img_means, yerr=img_stds, marker="o", capsize=4,
-                  color="#d62728", label="image-only AUROC")
+    ax_R.errorbar(ps, clean_means, yerr=clean_stds, marker="s", markersize=MS,
+                  capsize=CAPS, color="#1f77b4",
+                  label="clean" if report else "clean (multimodal) AUROC")
+    ax_R.errorbar(ps, img_means, yerr=img_stds, marker="o", markersize=MS,
+                  capsize=CAPS, color="#d62728",
+                  label="image-only" if report else "image-only AUROC")
     ax_R.axhline(baseline_img_right, ls="--", c="black", alpha=0.45, lw=1,
-                 label=f"image baseline ({baseline_img_right:.3f})")
-    ax_R.set_xticks(ps)
-    ax_R.set_xlabel("modality_dropout_text  p")
-    ax_R.set_title("(b) Dropout-rate sweep (test_unseen)",
-                   fontsize=10)
-    ax_R.legend(loc="upper right", fontsize=8, framealpha=0.92,
-                ncol=1, frameon=False, bbox_to_anchor=(1.0, -0.13))
+                 label="_nolegend_" if report
+                 else f"image baseline ({baseline_img_right:.3f})")
+    ax_R.set_xticks([0.0, 0.15, 0.30, 0.50] if report else ps)
+    ax_R.set_xlabel("text-dropout $p$" if report else "modality_dropout_text  p",
+                    fontsize=FS_LABEL)
+    ax_R.tick_params(axis="x", labelsize=FS_TICK)
+    if report:
+        ax_R.text(0.98, 0.03, "(b)", transform=ax_R.transAxes, va="bottom",
+                  ha="right", fontsize=FS_PANEL, fontweight="bold")
+    else:
+        ax_R.set_title("(b) Dropout-rate sweep (test_unseen)", fontsize=10)
+    if report:
+        ax_R.legend(loc="upper center", ncol=2, frameon=False, fontsize=FS_LEG,
+                    columnspacing=0.9, handletextpad=0.3, borderaxespad=0.2)
+    else:
+        ax_R.legend(loc="upper right", bbox_to_anchor=(1.0, -0.13),
+                    ncol=1, frameon=False, fontsize=FS_LEG, framealpha=0.92)
 
-    fig.suptitle("Image-branch revival: redistribution mechanism (a) "
-                 "and dropout-rate dose-response (b)",
-                 fontsize=11)
-    fig.tight_layout(rect=(0, 0.05, 1, 0.95))
+    if not report:
+        fig.suptitle("Image-branch revival: redistribution mechanism (a) "
+                     "and dropout-rate dose-response (b)",
+                     fontsize=11)
+    fig.tight_layout(rect=(0, 0, 1, 1) if report else (0, 0.05, 1, 0.95))
+
+    if report:
+        _save_report_pdf(fig, "revival_and_sweep")
+        return
     _save(fig, "07_combined_revival_and_sweep",
           "Side-by-side merge of Fig 2bm and Fig 6 for the poster — one image, "
           "two panels, shared AUROC y-axis. Dedicated image-only baseline is "
@@ -1052,6 +1125,9 @@ def fig_combined_revival_and_sweep(modality_all, perturbed_all):
 # =============================================================================
 
 def main() -> int:
+    import sys
+    report_only = "--report" in sys.argv[1:]
+
     print(f"Loading aggregator data...")
     perturbed_all = agg._load_perturbed()
     whitebox_all = agg._load_whitebox()
@@ -1060,6 +1136,15 @@ def main() -> int:
     print(f"  whitebox:  {len(whitebox_all)} pairs")
     print(f"  modality:  {len(modality_all)} pairs")
     print()
+
+    if report_only:
+        # Regenerate only the two report-tuned figures into the report dir.
+        print("Report figure: class_asymmetric")
+        fig_class_asymmetric(report=True)
+        print("Report figure: revival_and_sweep")
+        fig_combined_revival_and_sweep(modality_all, perturbed_all, report=True)
+        print(f"\nReport figures in {REPORT_FIG_DIR.relative_to(REPO)}/")
+        return 0
 
     print("Figure 1: headline_pareto")
     fig_headline_pareto(perturbed_all)

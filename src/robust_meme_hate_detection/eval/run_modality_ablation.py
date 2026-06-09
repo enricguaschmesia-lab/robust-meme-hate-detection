@@ -104,6 +104,9 @@ def main() -> int:
             'at_0.5': at_05.to_dict(),
             'best_threshold': best_t.threshold,
             'at_best_threshold': at_best.to_dict(),
+            # Full macro-F1/Acc grid so a dev-selected threshold can be read off
+            # post-hoc (the report fixes thresholds on clean dev, not on test).
+            'grid': [r.to_dict() for r in _grid],
         }
         print(
             f"{key:<12s}  AUROC={at_best.auroc:.4f}  F1={at_best.macro_f1:.4f}  "

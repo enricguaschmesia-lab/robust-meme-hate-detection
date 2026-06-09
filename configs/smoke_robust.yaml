@@ -1,0 +1,47 @@
+# Tiny end-to-end smoke for the unified robust trainer (BOTH mode), real data on GPU.
+# Used by the cluster smoke step: a couple of mini-batches, 1 epoch, small PGD.
+seed: 0
+
+model:
+  arch: ViT-B-32
+  pretrained: laion2b_s34b_b79k
+  freeze_image_encoder: false
+  freeze_text_encoder: true
+  head_hidden: 512
+  head_dropout: 0.2
+
+data:
+  dataset_root: /scratch/datasets/hate_meta
+  val_split: dev
+  num_workers: 4
+
+train:
+  batch_size: 16
+  epochs: 1
+  lr_head: 1.0e-3
+  lr_vision: 5.0e-5
+  weight_decay: 1.0e-2
+  warmup_ratio: 0.1
+  amp_dtype: bfloat16
+  early_stop_patience: 3
+  pos_weight_auto: true
+  select_metric: mean_macro_f1
+  eval_adv_max_batches: 2
+  max_train_batches: 4
+
+robust:
+  clean_weight: 1.0
+  naturalistic:
+    enabled: true
+    alpha: 1.0
+    beta:  0.5
+    gamma: 0.25
+    modality_dropout_text: 0.30
+  adversarial:
+    enabled: true
+    weight_bce: 1.0
+    weight_kl:  0.0
+    adv_eps_num: 8
+    pgd_steps: 3
+    pgd_alpha_frac: 0.25
+    norm: linf
