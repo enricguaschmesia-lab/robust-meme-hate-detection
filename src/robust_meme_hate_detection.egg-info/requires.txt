@@ -1,9 +1,8 @@
 torch
 torchvision
+open_clip_torch>=2.24
 Pillow
 numpy
-pandas
 scikit-learn
-tqdm
-huggingface_hub
 PyYAML
+matplotlib
