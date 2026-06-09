@@ -30,8 +30,19 @@
 \graphicspath{{figures/}}
 \renewcommand{\arraystretch}{0.95}
 
+% Widen the abstract: the ICML style sets it as a quote (2em indent each side).
+% Halving the side margin to 1em makes it wider but still narrower than the body
+% text, so it stays visually differentiated. Tune the 1em to taste
+% (smaller = wider; 2em = original).
+\renewenvironment{abstract}{%
+  \centerline{\large\bf Abstract}%
+  \vspace{-0.12in}%
+  \list{}{\setlength{\leftmargin}{1.2em}\setlength{\rightmargin}{\leftmargin}}%
+  \item\relax}%
+  {\endlist\vskip 0.12in}
+
 %%%%%%%%% ADD YOUR GROUP NUMBER %%%%%%%%%
-\icmltitlerunning{Robustness Audit of CLIP-Fusion Hate-Meme Detectors}
+\icmltitlerunning{Robustness of CLIP-fusion classifiers under naturalistic and adversarial perturbations}
 
 \begin{document}
 \nocite{IEEEexample:BSTcontrol}
@@ -45,6 +56,7 @@ R0bust M3m3 H@te D3t3ct!on\\[-0.1em]
 
 %%%%%%%%% ADD NAMES OF THE GROUP MEMBERS %%%%%%%%%
 \begin{icmlauthorlist}
+\vskip -0.05in
 \icmlauthor{Enric Guasch Mesi\`a}{ch} \quad
 \icmlauthor{Henrik Paul Gruber}{ch} \quad
 \icmlauthor{Jane Klavir}{ch} \\
@@ -56,7 +68,7 @@ R0bust M3m3 H@te D3t3ct!on\\[-0.1em]
 \centering
 %%%%%%%%% ADD YOUR GROUP NUMBER %%%%%%%%%
 Group 49
-\vskip 0.18in
+\vskip 0.15in
 ]
 
 % command for printing affiliation
@@ -66,16 +78,19 @@ Group 49
 \begin{abstract}
 Hateful meme detectors are deployed against users who actively obfuscate, yet are usually benchmarked only on clean inputs. We audit a
 CLIP-fusion classifier on meme datasets under naturalistic
-label-preserving edits and white-box adversarial attacks using three seeds and three splits. The
+label-preserving edits and white-box adversarial attacks. The
 audit exposes two failures: text edits dominate degradation as the image branch is
-effectively dead (image-only AUROC $0.59$ vs.\ a dedicated image baseline
-$0.63$); and it is undefended against
-white-box PGD ($\mathrm{AUROC}<0.01$ already at $\epsilon{=}2/255$). A lightweight pair
-of training-time interventions, clean$\leftrightarrow$perturbed KL-consistency
-plus per-example text-modality dropout, revives the image branch (image-only
-AUROC $0.59\!\rightarrow\!0.66$, exceeding the dedicated baseline) and raises the
+effectively dead (image-only AUROC $0.60$ vs.\ a dedicated image baseline
+$0.65$); and it is undefended against
+white-box PGD ($\mathrm{AUROC}<0.01$ already at $\epsilon{=}2/255$). Clean$\leftrightarrow$perturbed KL-consistency
+plus per-example text-modality dropout revives the image branch (image-only
+AUROC $0.60\!\rightarrow\!0.66$, exceeding the dedicated baseline) and lifts the
 count of fully naturalistic-robust held-out examples by $76\%$ at zero
-clean-accuracy cost. The defense is class-asymmetric: $97\%$ of corrections are benign memes, acting as a false-positive veto.
+clean-accuracy cost --- a class-asymmetric false-positive veto ($97\%$ of
+corrections on benign memes). Madry-style adversarial training in turn closes the
+white-box gap (PGD AUROC $0\!\rightarrow\!0.62$, stable under $100$-step attacks)
+at a $\approx\!0.12$ clean-AUROC cost, and a combined model attains both
+robustness types at that cost.
 
 %%%%%%%%% ADD KEYWORDS %%%%%%%%%
 % Make sure to keep keywords on a new line.
@@ -91,7 +106,7 @@ it, yet such models are reported almost exclusively on clean benchmark
 accuracy~\cite{kiela2020hatefulmemes,kumar2022hateclipper}. We audit a
 CLIP-fusion classifier under two complementary threat models --- naturalistic,
 label-preserving obfuscations and white-box image attacks --- and ask whether a
-cheap training-time intervention can close the naturalistic gap without
+simple training-time intervention can close the naturalistic gap without
 sacrificing clean accuracy. Using a controlled perturbation suite (8 text $\times$
 11 image attacks $\times$ 3 severities, plus composites, deterministically
 seeded) over three seeds and three splits, we contribute: (i)~an audit showing
@@ -100,7 +115,9 @@ dominate naturalistic degradation while white-box PGD breaks every recipe;
 (ii)~a lightweight recipe (KL consistency plus text-modality dropout) that
 revives the image branch at zero clean-accuracy cost; and (iii)~a failure
 analysis showing the defense chiefly prevents false positives on benign
-memes.
+memes; and (iv)~an adversarial-training study showing white-box robustness is
+attainable (PGD AUROC $0\!\rightarrow\!0.62$, stable to strong attacks) but
+trades $\approx\!0.12$ clean AUROC, with a combined model robust to both threats.
 
 %%%%%%%%% ADD RELATED WORK SECTION %%%%%%%%%
 \section{Related Work}
@@ -147,9 +164,6 @@ z=[\,t;v;|t-v|;t\odot v\,]\in\mathbb{R}^{2048}
 \endgroup
 where $|t-v|$ captures cross-modal disagreement and $t\odot v$ alignment, then applies
 $\mathrm{LN}\!\to\!\mathrm{Lin}(2048,512)\!\to\!\mathrm{GELU}\!\to\!\mathrm{Lin}(512,1)$.
-We freeze the CLIP encoders and train only the $1.05$M-parameter fusion head (no gain
-to fine-tuning $150$M params on $8.5$k memes); zeroing either embedding before
-the head yields unimodal forward modes for ablation.
 
 \textbf{Perturbation suite.} Eight text attacks (e.g.\ leetspeak, char
 deletion, typos, etc.) and eleven image attacks (e.g. Gaussian noise/blur,
@@ -158,7 +172,7 @@ level reachable with an off-the-shelf editor and high a stress ceiling.
 Cells use SHA-256-keyed per-example seeds; composite cells apply
 $K\in\{2,4\}$ perturbations per sample to model a determined user.
 
-\textbf{Robustness-aware training.} Each batch pairs a clean view with an
+\textbf{Robustness-aware training.} For this part of training, both encoders are frozen and we are just training on the fusion head. Each batch pairs a clean view with an
 on-the-fly perturbed view (perturb text/image/both with prob.\
 $0.5/0.3/0.2$). \textbf{AugOnly}
 supervises both views, $\mathcal{L}_{\text{Aug}}=\text{BCE}(y,\ell_{\text{clean}})+\alpha\,\text{BCE}(y,\ell_{\text{pert}})$.
@@ -170,7 +184,7 @@ prediction. The clean
 baseline minimizes $\text{BCE}$ alone, with AdamW, cosine decay, and early
 stopping on dev macro-F1.
 
-\textbf{White-box attacks.} We probe the worst case with image-space
+\textbf{White-box attacks.} Here the image encoder is unfrozen as this proved to have a positive impact on training. We probe the worst case with image-space
 FGSM~\cite{goodfellow2015explaining} and PGD~\cite{madry2018towards} ($L_\infty$,
 text fixed) over $\epsilon\in\{1,2,4,8\}/255$. As the targeted remedy for this
 regime we implement Madry-style adversarial training and a
@@ -244,6 +258,24 @@ KLDrop-p050  & 0.712 & \textbf{0.049} & \textbf{0.035} & \textbf{0.666} & 331 \\
 \vskip -0.2in
 \end{table}
 
+\begin{figure}[!tb]
+    \centering
+
+    \includegraphics[width=\linewidth]{revival_and_sweep.pdf}
+    \vskip -0.15in
+    \caption{\textbf{(a)} Per-branch forward AUROC (mean over $3$ splits
+    $\times\,3$ seeds). \textbf{(b)} Dropout sweep (\texttt{test\_unseen}).}
+    \label{fig:revival}
+
+    \vspace{0.15in}
+
+    \includegraphics[width=\linewidth]{class_asymmetric.pdf}
+    \vskip -0.15in
+    \caption{Per-example disagreements between \texttt{KLDrop-p015} and \texttt{KL}
+    on \texttt{test\_unseen} ($n{=}2000$), split by gold label.}
+    \label{fig:asym}
+\end{figure}
+
 
 \textbf{Defense: reviving the image branch at zero clean cost.}
 The dropout sweep (Fig.~\ref{fig:revival}b) shows image-only
@@ -254,20 +286,14 @@ rather than adding signal (Fig.~\ref{fig:revival}a): it lifts its image-only for
 to or above the dedicated baseline on every split, leaving text-only unchanged.
 Table~\ref{tab:recipes} gives the held-out trade-off: \texttt{KL} preserves clean
 AUROC, \texttt{KLDrop-p015} even nudges it up while improving every robustness
-column, and the count surviving all $57$ naturalistic cells rises
+column. The number of memes correctly withstanding all $57$ naturalistic permutations rises from
 $222\rightarrow391$ ($+76\%$). Composites are the realistic threat: two stacked text
 edits cost the clean model $\Delta\mathrm{AUROC}=0.073$ (medium) to $0.111$ (high) on
 \texttt{composite\_2text} --- on par with its worst single cell, yet reachable with
 everyday edits --- and \texttt{KLDrop} roughly halves the medium gap
 ($0.073\!\rightarrow\!0.035$, \texttt{p050}).
 
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=\linewidth]{revival_and_sweep.pdf}
-    \caption{\textbf{(a)} Per-branch forward AUROC (mean over $3$ splits
-    $\times\,3$ seeds). \textbf{(b)} Dropout sweep (\texttt{test\_unseen}).}
-    \label{fig:revival}
-\end{figure}
+
 
 
 
@@ -282,69 +308,73 @@ choice is thus deployment-conditional: false-positive-sensitive contexts prefer
 \texttt{KLDrop}, recall-sensitive ones prefer \texttt{KL}; the direction holds on
 all three splits.
 
-\begin{figure}[tb]
-    \centering
-    \includegraphics[width=\linewidth]{class_asymmetric.pdf}
-    \caption{Per-example disagreements between \texttt{KLDrop-p015} and \texttt{KL}
-    on \texttt{test\_unseen} ($n{=}2000$), split by gold label.}
-    \label{fig:asym}
-\end{figure}
-
-\textbf{Adversarial Results.} Running adversarial PGD attacks on the CLIP model trained only on clean images collapses AUROC from $0.73$ to $<0.01$ (ASR $>0.98$) at $\epsilon{=}2/255$ and
-to $0$ at $\epsilon\geq4/255$ (see Table \ref{tab:model_robustness}). 
-Adversarial training restores PGD AUROC ($0\!\rightarrow\!0.61$ at $\epsilon{=}8/255$) at a clean-AUROC cost ($0.74\!\rightarrow\!0.62$) that stems from the adversarial objective; unfreezing the vision encoder is the near clean-free ingredient that makes this robustness genuine. Considering this white-box is unrealistic, the score is overwhelmingly positive. Other adversarial attacks such as gray-box or black-box will be much closer in performance to clean rather than white-box.
 
 
-\begin{table}[tb]
+\textbf{Adversarial Results.} White-box PGD breaks every undefended model: clean
+and naturalistic (\texttt{KLDrop}) AUROC collapse from $\approx\!0.74$ to
+$<\!0.01$ (ASR $>0.98$) by $\epsilon{=}2/255$, and to $0$ by $\epsilon\geq4/255$
+(Table~\ref{tab:model_robustness}). Adversarial training --- unfreezing the
+vision encoder, which the pixel attack targets --- restores robustness but
+exposes a clean--robustness trade. A clean-preserving recipe (TRADES,
+early-stopped) keeps clean $\approx\!0.74$ but its robustness does not
+generalize: under PGD on held-out \texttt{test\_unseen} it falls to chance
+($0.53$ AUROC, ASR $0.26$ at $25$ steps; $0.26$ AUROC at $100$). A
+robustness-first recipe (Madry) instead holds $\approx\!0.62$ AUROC under PGD
+with ASR $\approx\!0$, flat across $10/25/100$ steps
+at a $\approx\!0.12$ clean-AUROC cost. As white-box access is unrealistic for a
+server-side detector, this cost is worth paying only when model weights are
+exposed.
+
+
+\begin{table}[H]
 \vskip -0.05in
-\begin{center}\begin{small}
-\setlength{\tabcolsep}{4pt}
+\centering
+\begin{small}
+\setlength{\tabcolsep}{3pt}
+
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccc}
 \toprule
-Model & Clean & Naturalistic & PGD \\
+Model & Clean & Naturalistic & White-box PGD \\
       & AUROC & AUROC ($\Delta$) & AUROC ($\Delta$) \\
 \midrule
-Clean                  & 0.738 & 0.598 ($-0.14$) & $<0.01$ ($-0.74$) \\
-Naturalistic (p$0.15$) & \textbf{0.743} & \textbf{0.643} ($-0.10$) & $<0.01$ ($-0.74$) \\
-Adversarial            & 0.616 & 0.540 ($-0.08$) & 0.610 ($-0.01$) \\
-\textbf{Combined}      & 0.614 & 0.548 ($-0.07$) & \textbf{0.610} ($-0.00$) \\
+Clean            & 0.738 & 0.598 ($0.14$) & $<0.01$ ($0.73$) \\
+Naturalistic & \textbf{0.743} & \textbf{0.643} ($0.10$) & $<0.01$ ($0.73$) \\
+Adversarial (clean-pres)   & 0.741 & 0.590 ($0.15$) & 0.531 ($0.21$) \\
+Adversarial (robust)        & 0.616 & 0.540 ($0.08$) & \textbf{0.625} ($\approx 0$) \\
+\textbf{Combined}           & 0.614 & 0.548 ($0.07$) & 0.610 ($\approx 0$) \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
+
 \vskip -0.08in
-\caption{Worst-cell robustness on held-out \texttt{test\_unseen}
-($3$-seed mean): clean AUROC, and attacked AUROC with the drop
-$\Delta$AUROC vs.\ clean under the single most damaging naturalistic
-perturbation and white-box PGD ($L_\infty$, $\epsilon{=}8/255$).
-\texttt{KLDrop} (naturalistic, $p{=}0.15$) is naturalistically robust at no clean
-cost but undefended against PGD; the combined model has the smallest degradation
-on \emph{both} axes. The clean drop for \emph{Adversarial}/\emph{Combined} stems
-from the multi-objective loss --- a frozen combined model shows the same
-$\approx\!0.63$ clean --- not from unfreezing, which is near clean-free and is
-what makes the PGD robustness genuine.}
+\caption{Cross-robustness on \texttt{test\_unseen} ($3$-seed mean
+AUROC): clean, and attacked AUROC (drop $\Delta$ vs.\ clean) under
+worst naturalistic cell and white-box PGD ($L_\infty$, $\epsilon{=}8/255$,
+$25$ steps).}
 \label{tab:model_robustness}
-\end{small}\end{center}
+\end{small}
 \vskip -0.2in
 \end{table}
 
-\textbf{Combined model.} Naturalistic training alone still collapses under
-white-box PGD (Table~\ref{tab:model_robustness}), so we unite both defenses in a
-single model trained jointly on three views per batch --- clean,
-naturalistic-perturbed, and PGD-adversarial --- under the composite loss
+\textbf{Combined model.} Training jointly on clean, naturalistic and PGD views
+under one composite loss
 $\mathcal{L}_{\text{comb}}=\mathcal{L}_{\text{KL}}+\delta\,\text{BCE}(y,\ell_{\text{adv}})$
 ($\delta{=}1$, \texttt{KLDrop} text-dropout in the forward, $\ell_{\text{adv}}$ the
-logit of the PGD view), unfreezing the vision encoder to absorb pixel-space
-attacks. On held-out \texttt{test\_unseen} ($3$ seeds) it
-inherits both: PGD AUROC at $\epsilon{=}8/255$ holds at $0.61$ (vs.\ $0.00$ for the
-clean and naturalistic-only models) at the lowest naturalistic ASR ($0.09$),
-trading clean AUROC ($0.61$ vs.\ $0.74$) --- a cost of the multi-objective loss,
-not the unfrozen encoder (a frozen combined model shows the same clean AUROC, but
-collapses under PGD). A single model can thus resist user obfuscation and
-white-box attack at once.
+logit of the PGD view) yields one model robust on both axes: the smallest
+degradation under both the worst naturalistic cell ($\Delta\,0.07$) and PGD
+($\Delta\!\approx\!0$, ASR $0$), at the same $\approx\!0.12$ clean cost as
+adversarial training. Warm-starting the combined model from the clean-preserving
+adversarial checkpoint (encoder frozen) instead recovers only the naturalistic
+operating point (clean $0.75$, PGD random), confirming the trade-off: high clean accuracy and generalizing white-box robustness cannot
+coexist. The combined model is hence the choice when both threats matter and
+some clean accuracy can be spent; otherwise \texttt{KLDrop} --- high clean and
+robust to the frequent naturalistic threat --- is the practical default.
 
-\textbf{Applicability to other Datasets.} To validate our results further, we applied our training to MAMI, which showed very similar test results to the Facebook dataset. We also used our model to predict MultiOFF and results were also great.
+\textbf{Applicability to other Datasets.} As further validation, we applied our training to datasets MAMI and MultiOFF, yielding similar and consistent preliminary results, proving that our approach translates well to other datasets.
 
 
-\textbf{Limitations.}.
+\textbf{Limitations.} In our experiments, we reasonably assume perturbations are label preserving. To guarantee this assumption holds, every modified meme would need inspection, which is beyond the scope of the project. The model was fine tuned on hate speech specifically; similar domains (e.g. misinformation or manipulation) are out of scope.
 
 %%%%%%%%% ADD CONCLUSION SECTION %%%%%%%%%
 \section{Conclusion}
@@ -355,8 +385,7 @@ A CLIP-fusion hateful meme detector is a text shortcut with a dead image branch
 white-box PGD. Our recipe (KL consistency plus text-modality dropout) revives the
 image branch above a dedicated baseline and raises held-out naturalistic
 robustness by $76\%$ at zero clean-accuracy cost, acting as a class-asymmetric
-false-positive veto for benign content; the white-box regime remains open for
-adversarial training. Hateful meme detectors should thus be reported with a
+false-positive veto for benign content; the white-box training substantially robustifies against adversarial attacks. Hateful meme detectors should thus be reported with a
 modality-resolved robustness audit, not clean accuracy alone, since the dominant
 failure --- over-flagging benign speech after a trivial edit --- is invisible on
 clean benchmarks. These are research prototypes, not moderators; we release the
