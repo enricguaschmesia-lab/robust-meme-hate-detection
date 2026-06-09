@@ -1,0 +1,42 @@
+# Adversarial robust recipe (Madry-style PGD adversarial training). The vision
+# encoder is unfrozen (the pixel attack targets it); the text encoder stays
+# frozen. Each batch adds a PGD view under delta*BCE_adv.
+seed: 0
+
+model:
+  arch: ViT-B-32
+  pretrained: laion2b_s34b_b79k
+  freeze_image_encoder: false          # train the vision tower
+  freeze_text_encoder: true
+  modality: multimodal
+  head_hidden: 512
+  head_dropout: 0.2
+
+data:
+  dataset_root: data/hateful_memes
+  train_split_file: data/processed/splits/train_split.json
+  val_split: dev
+  num_workers: 8
+
+train:
+  batch_size: 128
+  epochs: 10
+  lr_head: 1.0e-3
+  lr_vision: 5.0e-5
+  weight_decay: 1.0e-2
+  warmup_ratio: 0.1
+  early_stop_patience: 3
+  pos_weight_auto: true
+  select_metric: adv_macro_f1
+
+robust:
+  clean_weight: 1.0
+  naturalistic:
+    enabled: false
+  adversarial:
+    enabled: true
+    weight_bce: 1.0
+    weight_kl: 0.0                      # > 0 enables the TRADES-style consistency variant
+    adv_eps_num: 8                      # epsilon = 8/255 (L-inf)
+    pgd_steps: 10
+    pgd_alpha_frac: 0.25

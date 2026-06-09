@@ -1,1 +1,0 @@
-Mean ΔAUROC for the text-attack family per severity, per recipe. Lower is better. Monotone low ≤ medium ≤ high for every (recipe, split) row (sanity gate). `kldrop-p050` (brown) is the lowest at every severity on every split; `kldrop-p015` (light red) is close behind at zero clean-accuracy cost vs `kl`. The medium column is the internet-realistic threat headline.

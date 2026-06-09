@@ -1,23 +1,26 @@
 [project]
 name = "robust-meme-hate-detection"
-version = "0.1.0"
-description = "Adversarial robustness study for multimodal hateful meme detection."
+version = "1.0.0"
+description = "Robustness of CLIP-fusion hateful-meme classifiers under naturalistic and adversarial perturbations (EE-559, Group 49)."
 requires-python = ">=3.10"
 dependencies = [
     "torch",
     "torchvision",
+    "open_clip_torch>=2.24",
     "Pillow",
     "numpy",
-    "pandas",
     "scikit-learn",
-    "tqdm",
-    "huggingface_hub",
     "PyYAML",
+    "matplotlib",
 ]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-
+testpaths = ["tests"]
