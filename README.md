@@ -58,7 +58,7 @@ naturalistic / combined models survive the naturalistic edit that fools the clea
 baseline. (Demo PGD uses 10 steps for speed; the report uses 25.)
 
 ### 2. Getting the data
-Since the datasets are too huge to be submitted or hosted on GitHub, we did not include them. This section will outline how to proceed. For the Meta Hate Dataset (raw from https://www.kaggle.com/datasets/parthplc/facebook-hateful-meme-dataset), no preprocessing is needed, as it is already in the required shape. <br>
+Since the datasets are too huge to be submitted or hosted on GitHub, we did not include them. This section will outline how to proceed. For the Meta Hate Dataset (from paper https://arxiv.org/abs/2005.04790), no preprocessing is needed, as it is already in the required shape. <br>
 For MAMI (raw download from https://drive.google.com/file/d/169qe9n4EbNlVbzFWNMjVX3N74Hh5Jcqr/view), please run 
 
 ```bash
