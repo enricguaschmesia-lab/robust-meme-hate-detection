@@ -18,7 +18,11 @@ edits (text + image perturbations) and **white-box** L∞ adversarial attacks
 ## Quick start
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate #(Unix shell)
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1 #(Windows Powershell)
+
 pip install -e .          # installs the package + dependencies (torch, open_clip, ...)
 pytest                    # unit tests (CPU, no dataset, no network)
 ```
