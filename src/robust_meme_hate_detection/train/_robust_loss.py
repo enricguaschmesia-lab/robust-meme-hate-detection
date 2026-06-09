@@ -44,40 +44,60 @@ def binary_kl(p: torch.Tensor, q: torch.Tensor, eps: float = 1e-7) -> torch.Tens
 def robust_loss(
     *,
     logit_clean: torch.Tensor,
-    logit_pert: torch.Tensor,
     labels: torch.Tensor,
-    alpha: float,
-    beta: float,
-    gamma: float,
+    logit_pert: Optional[torch.Tensor] = None,
+    alpha: float = 0.0,
+    beta: float = 0.0,
+    gamma: float = 0.0,
     image_logit_clean: Optional[torch.Tensor] = None,
     image_logit_pert: Optional[torch.Tensor] = None,
+    logit_adv: Optional[torch.Tensor] = None,
+    delta: float = 0.0,
+    epsilon_kl: float = 0.0,
+    clean_weight: float = 1.0,
     pos_weight: Optional[torch.Tensor] = None,
 ) -> dict[str, torch.Tensor]:
-    """Compose the Phase-5 robust loss.
+    """Compose the unified robust loss for naturalistic and/or adversarial views.
 
-    ``L = BCE(p_clean, y) + α · BCE(p_pert, y) + β · KL_full + γ · KL_image``
+    ``L = w_clean · BCE(p_clean, y)
+          + α · BCE(p_pert, y) + β · KL_full + γ · KL_image           (naturalistic)
+          + δ · BCE(p_adv, y)  + ε · KL(p_clean ‖ p_adv)``            (adversarial)
 
-    ``KL_full`` is the binary KL from ``detach(sigmoid(logit_clean))`` to
-    ``sigmoid(logit_pert)``. ``KL_image`` is the analogous term computed on
-    the image-only branch logits, when both are supplied; if either is
-    ``None`` the term collapses to zero and ``γ`` is ignored.
+    Every extra term collapses to zero when its weight is ``0`` or its logits
+    are ``None``, so this single function serves naturalistic-only,
+    adversarial-only, and both-enabled regimes:
 
-    Returns a dict with keys ``total``, ``ce_clean``, ``ce_pert``,
-    ``kl_full``, ``kl_image`` so the train loop can log each term.
+    * Naturalistic terms (``ce_pert``, ``kl_full``, ``kl_image``) require
+      ``logit_pert`` (and, for ``kl_image``, both image-only logits).
+    * Adversarial terms (``ce_adv``, ``kl_adv``) require ``logit_adv``.
+      ``ce_adv`` is the Madry-style cross-entropy on the PGD view; ``kl_adv``
+      is the TRADES-style consistency term pulling the perturbed prediction
+      toward the detached clean one.
+
+    The clean-side target inside every KL term is detached: the KL terms pull
+    the perturbed/adversarial prediction toward the clean one, never the
+    reverse. Returns a dict with each component for per-step logging.
     """
+    zero = logit_clean.new_zeros(())
+
     ce_clean = F.binary_cross_entropy_with_logits(
         logit_clean, labels, pos_weight=pos_weight
     )
-    ce_pert = F.binary_cross_entropy_with_logits(
-        logit_pert, labels, pos_weight=pos_weight
-    )
 
-    if beta > 0.0:
+    # ---------------------------------------------------------- naturalistic
+    if logit_pert is not None:
+        ce_pert = F.binary_cross_entropy_with_logits(
+            logit_pert, labels, pos_weight=pos_weight
+        )
+    else:
+        ce_pert = zero
+
+    if beta > 0.0 and logit_pert is not None:
         p_clean = torch.sigmoid(logit_clean.float()).detach()
         q_pert = torch.sigmoid(logit_pert.float())
         kl_full = binary_kl(p_clean, q_pert).mean()
     else:
-        kl_full = logit_clean.new_zeros(())
+        kl_full = zero
 
     if (
         gamma > 0.0
@@ -88,13 +108,37 @@ def robust_loss(
         q_img_pert = torch.sigmoid(image_logit_pert.float())
         kl_image = binary_kl(p_img_clean, q_img_pert).mean()
     else:
-        kl_image = logit_clean.new_zeros(())
+        kl_image = zero
 
-    total = ce_clean + alpha * ce_pert + beta * kl_full + gamma * kl_image
+    # ----------------------------------------------------------- adversarial
+    if logit_adv is not None:
+        ce_adv = F.binary_cross_entropy_with_logits(
+            logit_adv, labels, pos_weight=pos_weight
+        )
+    else:
+        ce_adv = zero
+
+    if epsilon_kl > 0.0 and logit_adv is not None:
+        p_clean_adv = torch.sigmoid(logit_clean.float()).detach()
+        q_adv = torch.sigmoid(logit_adv.float())
+        kl_adv = binary_kl(p_clean_adv, q_adv).mean()
+    else:
+        kl_adv = zero
+
+    total = (
+        clean_weight * ce_clean
+        + alpha * ce_pert
+        + beta * kl_full
+        + gamma * kl_image
+        + delta * ce_adv
+        + epsilon_kl * kl_adv
+    )
     return {
         "total": total,
         "ce_clean": ce_clean,
         "ce_pert": ce_pert,
         "kl_full": kl_full,
         "kl_image": kl_image,
+        "ce_adv": ce_adv,
+        "kl_adv": kl_adv,
     }
