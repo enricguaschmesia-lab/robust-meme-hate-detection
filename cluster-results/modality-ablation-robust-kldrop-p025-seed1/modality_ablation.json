@@ -1,0 +1,70 @@
+{
+  "ckpt": "/scratch/robust-meme-hate-detection/experiments/train-robust-kldrop-p025-seed1/ckpt/best.pt",
+  "split": "dev",
+  "n": 500,
+  "global_seed": 0,
+  "multimodal": {
+    "at_0.5": {
+      "accuracy": 0.656,
+      "macro_f1": 0.6487157702110973,
+      "auroc": 0.730944,
+      "precision": 0.7191011235955056,
+      "recall": 0.512,
+      "fpr": 0.2,
+      "fnr": 0.488
+    },
+    "best_threshold": 0.38,
+    "at_best_threshold": {
+      "accuracy": 0.674,
+      "macro_f1": 0.6737063357021319,
+      "auroc": 0.730944,
+      "precision": 0.6851063829787234,
+      "recall": 0.644,
+      "fpr": 0.296,
+      "fnr": 0.356
+    }
+  },
+  "text_only": {
+    "at_0.5": {
+      "accuracy": 0.594,
+      "macro_f1": 0.5938684133659305,
+      "auroc": 0.621248,
+      "precision": 0.5975103734439834,
+      "recall": 0.576,
+      "fpr": 0.388,
+      "fnr": 0.424
+    },
+    "best_threshold": 0.49,
+    "at_best_threshold": {
+      "accuracy": 0.594,
+      "macro_f1": 0.5939983759935039,
+      "auroc": 0.621248,
+      "precision": 0.5943775100401606,
+      "recall": 0.592,
+      "fpr": 0.404,
+      "fnr": 0.408
+    }
+  },
+  "image_only": {
+    "at_0.5": {
+      "accuracy": 0.598,
+      "macro_f1": 0.5930762222897055,
+      "auroc": 0.6472559999999999,
+      "precision": 0.6256410256410256,
+      "recall": 0.488,
+      "fpr": 0.292,
+      "fnr": 0.512
+    },
+    "best_threshold": 0.47,
+    "at_best_threshold": {
+      "accuracy": 0.622,
+      "macro_f1": 0.6215625262803801,
+      "auroc": 0.6472559999999999,
+      "precision": 0.630901287553648,
+      "recall": 0.588,
+      "fpr": 0.344,
+      "fnr": 0.412
+    }
+  },
+  "elapsed_seconds": 20.918028593063354
+}

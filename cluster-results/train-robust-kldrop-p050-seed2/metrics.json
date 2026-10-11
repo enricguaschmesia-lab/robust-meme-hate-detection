@@ -1,0 +1,30 @@
+{
+  "config_path": "configs/stage1_robust_kl_drop_p050.yaml",
+  "seed": 2,
+  "modality": "multimodal",
+  "device": "cuda",
+  "pos_weight": 1.7864855451062347,
+  "n_train": 8000,
+  "n_val": 500,
+  "trainable_params": 1053697,
+  "total_params": 152331010,
+  "amp_dtype": "bfloat16",
+  "robust": {
+    "alpha": 1.0,
+    "beta": 0.5,
+    "gamma": 0.25,
+    "modality_dropout_text": 0.5,
+    "modality_dropout_image": 0.0
+  },
+  "val_accuracy": 0.588,
+  "val_macro_f1": 0.5867039034411916,
+  "val_auroc": 0.6439440000000001,
+  "val_precision": 0.5990990990990991,
+  "val_recall": 0.532,
+  "val_fpr": 0.356,
+  "val_fnr": 0.468,
+  "best_epoch": 0,
+  "train_loss_at_best": 1.7112289590220298,
+  "epochs_run": 4,
+  "elapsed_seconds": 351.218377828598
+}

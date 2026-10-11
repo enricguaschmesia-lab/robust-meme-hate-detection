@@ -1,0 +1,41 @@
+seed: 0
+
+model:
+  arch: ViT-B-32
+  pretrained: laion2b_s34b_b79k
+  freeze_encoders: true
+  head_hidden: 512
+  head_dropout: 0.2
+
+data:
+  dataset_root: /scratch/datasets/hate_meta
+  train_split_file: data/processed/splits/train_split.json
+  val_split: dev
+  num_workers: 8
+
+train:
+  batch_size: 128
+  epochs: 10
+  lr_head: 1.0e-3
+  weight_decay: 1.0e-2
+  warmup_ratio: 0.1
+  amp_dtype: bfloat16
+  early_stop_patience: 3
+  early_stop_metric: macro_f1
+  pos_weight_auto: true
+
+robust:
+  alpha: 1.0
+  beta:  0.5
+  gamma: 0.25
+  # Phase 9c finer sweep: p=0.20 — between Phase-9b's p=0.15 and p=0.30.
+  modality_dropout_text: 0.20
+  modality_dropout_image: 0.0
+  text_fraction:  0.5
+  image_fraction: 0.3
+  both_fraction:  0.2
+  text_attacks:  [leetspeak, char_deletion, char_swap, censoring, keyboard_typo]
+  image_attacks: [gaussian_noise, blur, compression, brightness_down, occlusion, typographic]
+  severity_weights_text:  [1, 2, 2]
+  severity_weights_image: [1, 1, 1]
+  augmenter_seed: 0

@@ -1,0 +1,31 @@
+{
+  "split": "dev",
+  "n_samples_per_cell": 500,
+  "attacks": [
+    "leetspeak",
+    "char_deletion",
+    "char_swap",
+    "spacing",
+    "punctuation",
+    "case_noise",
+    "censoring",
+    "keyboard_typo",
+    "gaussian_noise",
+    "blur",
+    "compression",
+    "brightness_up",
+    "brightness_down",
+    "contrast_up",
+    "contrast_down",
+    "translation",
+    "crop",
+    "occlusion"
+  ],
+  "severities": [
+    "low",
+    "medium",
+    "high"
+  ],
+  "global_seed": 0,
+  "total_rows": 27000
+}

@@ -1,0 +1,1 @@
+Per-recipe Pareto trade-off on each split. Down-right is better (high clean AUROC, low worst-cell ΔAUROC under text attacks). `kldrop` (red) is the strict winner on Worst-cell text Δ across all three splits; `kl` (green) preserves clean AUROC best. The two Pareto winners are mechanistically distinct (modality dropout vs KL consistency).

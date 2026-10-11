@@ -1,0 +1,12 @@
+{
+  "config_path": "/home/hgruber/robust-meme-hate-detection/configs/stage1.yaml",
+  "seed": 0,
+  "modality": "multimodal",
+  "device": "cuda",
+  "pos_weight": 1.7868852459016393,
+  "n_train": 8500,
+  "n_val": 500,
+  "trainable_params": 1053697,
+  "total_params": 152331010,
+  "amp_dtype": "bfloat16"
+}

@@ -25,6 +25,16 @@ reports/generated/*
 *.pth
 *.safetensors
 
+# Pulled cluster artifacts — exclude image payloads (perturbation PNGs etc.).
+# Keep small metadata (manifest.csv, summary.json, metrics.json, pairs.csv).
+cluster-results/**/*.png
+cluster-results/**/*.jpg
+cluster-results/**/*.jpeg
+cluster-results/**/*.gif
+cluster-results/**/*.bmp
+cluster-results/**/*.webp
+cluster-checkpoints/
+
 # Keep directory placeholders
 !data/raw/.gitkeep
 !data/processed/.gitkeep
