@@ -166,12 +166,8 @@
     </g>
   </g>
 
-  <text x="850" y="2230" font-size="28" fill="#262626">
+  <text x="850" y="2230" font-size="26" fill="#262626">
     Splits: dev (n=500) · test_seen (n=1000, 49 % pos) · test_unseen (n=2000, 37.5 % pos).
-  </text>
-  <!--  (the splits / italic lines were moved below the right column so the right column fills the panel) -->
-  <text x="850" y="2208" font-size="24" font-style="italic" fill="#595959">
-    Decision threshold τ tuned on dev only; reused unchanged on test splits.
   </text>
 
   <!-- ================================================================ -->

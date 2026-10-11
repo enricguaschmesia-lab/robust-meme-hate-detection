@@ -118,13 +118,18 @@ class CLIPHateMemeClassifier(nn.Module):
         self.normalize = Normalize(CLIP_MEAN, CLIP_STD)
         self.head = FusionHead(dim=self.embed_dim, hidden=head_hidden, dropout=head_dropout)
 
+        # Per-encoder overrides take precedence over the coarse ``freeze_encoders``
+        # flag. When neither override is set we keep the original behaviour
+        # (freeze both encoders when ``freeze_encoders`` is True). This lets the
+        # unified trainer unfreeze only the vision tower for adversarial training
+        # while leaving the text tower frozen.
         if freeze_image_encoder is None and freeze_text_encoder is None:
             if freeze_encoders:
                 self.freeze_encoders()
         else:
             self.set_encoder_trainability(
-                image_trainable=not bool(freeze_image_encoder) if freeze_image_encoder is not None else True,
-                text_trainable=not bool(freeze_text_encoder) if freeze_text_encoder is not None else True,
+                image_trainable=(not bool(freeze_image_encoder)) if freeze_image_encoder is not None else True,
+                text_trainable=(not bool(freeze_text_encoder)) if freeze_text_encoder is not None else True,
             )
 
     # ------------------------------------------------------------------ helpers
@@ -137,6 +142,12 @@ class CLIPHateMemeClassifier(nn.Module):
             p.requires_grad = False
 
     def set_encoder_trainability(self, *, image_trainable: bool, text_trainable: bool) -> None:
+        """Freeze both encoders, then selectively re-enable grads per tower.
+
+        ``image_trainable`` unfreezes the whole visual tower; ``text_trainable``
+        unfreezes the text transformer plus its token/positional embeddings,
+        ``ln_final`` and ``text_projection``.
+        """
         self.freeze_encoders()
         if image_trainable:
             for p in self.clip.visual.parameters():

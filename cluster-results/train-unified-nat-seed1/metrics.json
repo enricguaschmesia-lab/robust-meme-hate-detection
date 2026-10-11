@@ -1,0 +1,45 @@
+{
+  "config_path": "configs/robust_nat.yaml",
+  "seed": 1,
+  "modality": "multimodal",
+  "device": "cuda",
+  "pos_weight": 1.7864855451062347,
+  "n_train": 8000,
+  "n_val": 500,
+  "trainable_params": 1053697,
+  "total_params": 152331010,
+  "amp_dtype": "bfloat16",
+  "select_metric": "clean_macro_f1",
+  "robust": {
+    "clean_weight": 1.0,
+    "naturalistic": {
+      "enabled": true,
+      "alpha": 1.0,
+      "beta": 0.5,
+      "gamma": 0.25,
+      "modality_dropout_text": 0.3,
+      "modality_dropout_image": 0.0
+    },
+    "adversarial": {
+      "enabled": false,
+      "weight_bce": 1.0,
+      "weight_kl": 0.0,
+      "epsilon_over_255": 8,
+      "pgd_steps": 10,
+      "pgd_alpha_frac": 0.25,
+      "norm": "linf"
+    }
+  },
+  "val_accuracy": 0.64,
+  "val_macro_f1": 0.6290250779047336,
+  "val_auroc": 0.7240719999999998,
+  "val_precision": 0.7134146341463414,
+  "val_recall": 0.468,
+  "val_fpr": 0.188,
+  "val_fnr": 0.532,
+  "best_epoch": 6,
+  "select_score": 0.6290250779047336,
+  "train_loss_at_best": 1.0684821288431845,
+  "epochs_run": 10,
+  "elapsed_seconds": 800.6585245132446
+}

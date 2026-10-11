@@ -3,6 +3,10 @@
 The attacks rely on the model's contract that ``forward(images01, token_ids)``
 is differentiable through the image branch (Normalize lives inside the model;
 see model_architecture.md §4.2).
+
+Both attacks support ``norm='linf'`` (default) and ``norm='l2'``. The new
+``norm`` keyword defaults to ``'linf'`` so existing callers (e.g.
+``eval/run_whitebox.py``) keep their previous behaviour unchanged.
 """
 
 from __future__ import annotations
@@ -56,7 +60,7 @@ def pgd_image(
 ) -> torch.Tensor:
     """Iterative Projected Gradient Descent attack on the image tensor.
 
-    Supports `norm='linf'` (default) and `norm='l2'`.
+    Supports ``norm='linf'`` (default) and ``norm='l2'``.
     """
     if loss_fn is None:
         loss_fn = _bce_loss
