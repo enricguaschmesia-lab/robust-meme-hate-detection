@@ -4,8 +4,11 @@ Course project (EE-559, EPFL): **adversarial robustness of multimodal hateful
 meme detectors**. We train a CLIP-based dual-encoder classifier on the Hateful
 Memes dataset, attack it with FGSM/PGD and a naturalistic perturbation suite
 (8 text × 10 image attacks × 3 severities, deterministically seeded), and
-study a robust training variant that combines perturbation augmentation with a
-KL consistency loss.
+study two defenses: a robust training variant that combines perturbation
+augmentation with a KL consistency loss (naturalistic threat model), and
+PGD adversarial training on the image branch (white-box threat model). Converters
+for three further meme datasets (MAMI, HarMeme, MultiOFF) allow the same
+pipeline to run beyond Hateful Memes.
 
 ## Status
 
@@ -215,9 +218,10 @@ PYTHONPATH=src .venv/bin/python3 scripts/make_poster_figures.py
 
 **Important caveats** (also documented in the per-phase limitations sections):
 
-- **PGD ε ≥ 2/255 is fully undefended** on every recipe across all three
-  splits (AUROC ≈ 0). Naturalistic-only is the project's threat-model
-  scope; adversarial training is owned separately.
+- **PGD ε ≥ 2/255 is fully undefended** on every naturalistic recipe
+  across all three splits (AUROC ≈ 0). The naturalistic recipes are not
+  designed for this threat model; the white-box defense is PGD adversarial
+  training (see *Adversarial training* below).
 - **Class-asymmetric finding refreshed for `kldrop-p015`.** Phase 6's
   original dev finding (kldrop saves label=0, kl saves label=1) was on
   the now-Pareto-dominated p=0.30 recipe with small disagreement
@@ -235,6 +239,115 @@ PYTHONPATH=src .venv/bin/python3 scripts/make_poster_figures.py
   *some* perturbation in the 73-cell grid; pushing further would
   likely require a stronger text encoder or representation-level
   robustness loss rather than more augmentation.
+
+## Adversarial training (white-box defense)
+
+**Status: implemented; results not yet aggregated in the repository.** The
+naturalistic recipes above leave white-box PGD at ε ≥ 2/255 undefended. This
+track trains against that threat model directly.
+
+**Method** (`train/stage1_adversarial.py`, config
+`configs/stage1_adversarial.yaml`). Madry-style training: each batch is
+attacked with PGD on the `[0,1]` image tensor (random start, text left
+untouched), and the model is updated on a mix of clean and adversarial loss:
+
+```text
+loss = α · BCE(clean) + (1 − α) · L_adv
+L_adv = BCE(adversarial)              # train.adv_training_type: regular
+L_adv = KL(p_clean ‖ p_adversarial)   # train.adv_training_type: trades
+```
+
+- **ε schedule.** `robust.attack_settings` lists one or more
+  `{epsilon_over_255, pgd_steps, pgd_alpha_frac}` entries; training cycles
+  through them round-robin, one setting per batch. The shipped config uses
+  ε ∈ {1, 2, 4, 8, 12}/255, 10 steps, step size 0.25·ε, α = 0.6.
+- **Trainable encoders.** Unlike Stage 1, the image encoder is fine-tuned so
+  the visual features themselves can become robust. New per-encoder flags in
+  the model config (`freeze_image_encoder`, `freeze_text_encoder`) override
+  `freeze_encoders`; the shipped config trains the image encoder and keeps the
+  text encoder frozen.
+- **Warm start.** `--ckpt` initialises from an existing checkpoint (e.g. a
+  clean Stage-1 model) before adversarial fine-tuning.
+- **Model selection.** After each epoch the model is evaluated on clean dev
+  and on dev attacked with every ε setting (attacks regenerated against the
+  current weights). `ckpt/best.pt` is the epoch with the best *attacked* dev
+  macro-F1; `metrics.json` records both the clean and attacked numbers, and a
+  few adversarial example images are saved to `samples/`.
+
+Current code behaviour worth knowing when tuning:
+
+- `train.lr_vis` and `train.pos_weight_auto` are not read yet. The encoder
+  learning rate is fixed at 5e-5 and `pos_weight` at 1.0 in the trainer.
+- Training attacks always use the L∞ norm. L2 is available in the attack
+  functions and in white-box evaluation (below), but not wired into training.
+
+**Attacks: L2 norm.** `attacks/pgd.py` now supports `norm='l2'` in both
+`fgsm_image` and `pgd_image` (normalised-gradient steps, projection onto the
+L2 ball of radius ε) alongside the default `norm='linf'`.
+
+**White-box evaluation additions** (`eval/run_whitebox.py`):
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--norm` | `linf` | Attack norm, `linf` or `l2`; recorded in the output JSON |
+| `--max-epsilon` | `0` (off) | Drop ε numerators above this value |
+| `--sample-limit` | `4` | Save this many clean/adversarial image pairs per (attack, ε) cell to `samples/<attack>_eps<e>/`, with a side-by-side `*_pair.png` annotated with clean vs attacked probability and a `manifest.json` |
+
+**Running it** (Run:AI; all settings via environment variables):
+
+```bash
+# Adversarial training: warm-start from CKPT, settings from the YAML config
+JOB=adv-stage1-seed0 \
+CKPT=/scratch/robust-meme-hate-detection/experiments/<clean-stage1-run>/ckpt/best.pt \
+SEED=0 \
+bash scripts/run_adversarial_stage1.sh
+
+# White-box FGSM/PGD sweep against any checkpoint
+JOB=whitebox-adv-seed0 \
+CKPT=/scratch/robust-meme-hate-detection/experiments/adv-stage1-seed0/ckpt/best.pt \
+EPSILONS=1,2,4,8 PGD_STEPS=25 \
+bash scripts/run_whitebox_stage1.sh
+
+# Attack one image and save the result (edit run_pgd_single.py for image/text/ε)
+JOB=pgd-single-01456 CKPT=/scratch/.../ckpt/best.pt \
+bash scripts/run_pgd_single_image.sh
+```
+
+`run_adversarial_stage1.sh` hard-codes `USER_UID`, so edit it to your own
+UID. Both scripts also carry default checkpoint paths from earlier runs, so
+always set `CKPT` and `JOB` explicitly. `run_whitebox_stage1.sh` fixes `NORM=linf`; edit the script to run
+an L2 sweep. The generic launchers `scripts/submit_runai.sh` and
+`scripts/submit_stage1_runai.sh` wrap the same `runai submit` pattern.
+
+## Additional datasets (MAMI, HarMeme, MultiOFF)
+
+Three converters rewrite other meme datasets into the Hateful Memes layout
+(`train.jsonl`, `dev.jsonl`, `test.jsonl`, `img/`) so that every trainer and
+evaluator runs on them unchanged. Point `data.dataset_root` in a config at the
+output folder. The shipped `configs/stage1_adversarial.yaml` currently uses
+`/scratch/datasets/MAMI_prepared`.
+
+| Dataset | Converter | Binary label (1 =) | Splits |
+|---|---|---|---|
+| MAMI (misogyny) | `data/prepare_mami.py` | any of misogynous / shaming / stereotype / objectification / violence | train → train, trial → dev, test (+ `test_labels.txt`) → test |
+| HarMeme (Harm-C + Harm-P) | `data/prepare_harmeme.py` | "somewhat harmful" or "very harmful" | Harm-C and Harm-P concatenated per split (val → dev) |
+| MultiOFF (offensive) | `data/prepare_multioff.py` | "offensive" | training → train, validation → dev, testing → test |
+
+```bash
+python -m robust_meme_hate_detection.data.prepare_mami     --raw-dir "data/raw/MAMI DATASET" --out-dir data/prepared/mami
+python -m robust_meme_hate_detection.data.prepare_harmeme  --raw-dir data/raw/HarMeme         --out-dir data/prepared/harmeme
+python -m robust_meme_hate_detection.data.prepare_multioff --raw-dir data/raw/MultiOFF_Dataset --out-dir data/prepared/multioff
+```
+
+Images are symlinked into `img/` by default; pass `--copy` to copy them. The
+raw datasets are not distributed with this repository. Each converter's
+docstring documents the raw layout it expects.
+
+`HatefulMemesDataset` and `build_hateful_memes_dataloader` also accept
+optional `image_perturbation` / `text_perturbation` callables
+(`apply_perturbations=True`). These apply a naturalistic perturbation before
+the standard transforms, e.g. to evaluate a checkpoint on a perturbed copy of
+any of these datasets.
 
 ## Architecture (one-paragraph)
 
@@ -257,23 +370,29 @@ configs/                       Stage and data YAML configs
   stage1_robust_augonly.yaml   Robust trainer: BCE_clean + BCE_pert (no KL)
   stage1_robust_kl.yaml        Robust trainer: + β·KL_full + γ·KL_image_branch
   stage1_robust_kl_drop.yaml   Robust trainer: kl + per-example text-modality dropout (p=0.30)
+  stage1_adversarial.yaml      PGD adversarial training (ε schedule, α, regular|trades)
   smoke.yaml                   Short cluster smoke
   data/hateful_memes.yaml      Dataset paths
 src/robust_meme_hate_detection/
   models/clip_fusion.py        CLIPHateMemeClassifier + Normalize + FusionHead
   data/                        Hateful Memes loader, splits, transforms
-  attacks/pgd.py               FGSM / PGD on [0,1] images
+  data/prepare_{mami,harmeme,multioff}.py
+                               Convert other meme datasets to the Hateful Memes layout
+  attacks/pgd.py               FGSM / PGD on [0,1] images (L∞ or L2)
   perturbations/               Naturalistic text + image perturbations
                                (TextPerturbation, ImagePerturbation, ComposePerturbation;
                                 from_preset(level) + SHA-256-keyed seeds)
   train/stage1.py              Frozen-encoder trainer (--modality multimodal|text|image)
   train/stage1_robust.py       Phase-5 robust trainer (on-the-fly aug + optional KL terms)
+  train/stage1_adversarial.py  PGD adversarial trainer (white-box defense)
   train/_robust_augmenter.py   RobustAugmenter — per-example text/image perturbation sampler
   train/_robust_loss.py        binary_kl + robust_loss utilities
   train/baseline_majority.py   Majority-class predict-0 baseline (writes same metrics.json schema)
   eval/run_eval.py             Clean + threshold sweep + PGD eval
   eval/run_perturbed.py        Phase-3 perturbation benchmark (attack × severity grid → JSON)
-  eval/run_whitebox.py         Phase-4 white-box FGSM/PGD ε-sweep (→ whitebox_eval.json)
+  eval/run_whitebox.py         Phase-4 white-box FGSM/PGD ε-sweep (→ whitebox_eval.json,
+                               L∞/L2, optional adversarial sample images)
+  eval/run_modality_ablation.py Image-only / text-only forward of a multimodal ckpt
   eval/inspect_perturbations.py Cluster entrypoint for the label-preservation inspection set
   eval/metrics.py              Accuracy, F1, AUROC, ASR, robustness gap
   utils/                       Seeding, JSON logging, threshold sweep
@@ -288,6 +407,11 @@ scripts/
                                + modality_ablation.json under cluster-results/ and writes
                                project_planning/phase4/ tables + figures (incl. robust_vs_clean.md)
   failure_analysis.py          Per-example failure bucketing + robust-status annotation
+  make_poster_figures.py       Regenerate the 6 poster figures
+  run_adversarial_stage1.sh    Run:AI launcher for adversarial training
+  run_whitebox_stage1.sh       Run:AI launcher for the white-box ε-sweep
+  run_pgd_single_image.sh      Run:AI launcher for run_pgd_single.py
+  submit_runai.sh, submit_stage1_runai.sh   Generic Run:AI submit helpers
   example_perturbations.py     Legacy perturbation demo on a tiny dataset slice
   cluster_entrypoint.sh        PYTHONPATH wrapper for Run:AI jobs
 cluster/
@@ -298,7 +422,10 @@ cluster/
 tests/                         Pytest unit tests
 data/processed/splits/
   train_split.json             Deterministic 8000/500 ID partition (committed)
-cluster-results/, cluster-checkpoints/   Pulled job artifacts (gitignored)
+cluster-results/               Pulled job artifacts: JSON/CSV results are committed,
+                               images are gitignored
+cluster-checkpoints/           Pulled checkpoints (gitignored)
+run_pgd_single.py              PGD on a single meme, saves the adversarial image
 project_planning/              Architecture spec, worklog, completion report
 docs/                          Cluster-data and split-policy notes
 Dockerfile                     Custom image (open_clip + pre-baked CLIP weights)
